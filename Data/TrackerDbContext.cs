@@ -1,6 +1,4 @@
-
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using DotNetEnv;
 
 namespace Tracker.Data;
@@ -31,158 +29,372 @@ public class TrackerDbContext : DbContext
         }
     }
 
+    public DbSet<Language> Languages => Set<Language>();
     public DbSet<Category> Categories => Set<Category>();
-    public DbSet<Component> Components => Set<Component>();
-    public DbSet<Retailer> Retailers => Set<Retailer>();
+    public DbSet<CategoryTranslation> CategoryTranslations => Set<CategoryTranslation>();
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductTranslation> ProductTranslations => Set<ProductTranslation>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
+    public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+    public DbSet<Merchant> Merchants => Set<Merchant>();
     public DbSet<Offer> Offers => Set<Offer>();
     public DbSet<PriceHistory> PriceHistories => Set<PriceHistory>();
     public DbSet<User> Users => Set<User>();
-    public DbSet<PCBuild> PCBuilds => Set<PCBuild>();
-    public DbSet<PCBuildItem> PCBuildItems => Set<PCBuildItem>();
-    public DbSet<MagicLink> MagicLinks => Set<MagicLink>();
-    public DbSet<MagicLinkClick> MagicLinkClicks => Set<MagicLinkClick>();
+    public DbSet<SavedCollection> SavedCollections => Set<SavedCollection>();
+    public DbSet<SavedCollectionItem> SavedCollectionItems => Set<SavedCollectionItem>();
+    public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
+    public DbSet<ShareLinkClick> ShareLinkClicks => Set<ShareLinkClick>();
+    public DbSet<AffiliateConversion> AffiliateConversions => Set<AffiliateConversion>();
     public DbSet<PriceAlert> PriceAlerts => Set<PriceAlert>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<CrawlRun> CrawlRuns => Set<CrawlRun>();
     public DbSet<CrawledListing> CrawledListings => Set<CrawledListing>();
-    public DbSet<AffiliateConversion> AffiliateConversions => Set<AffiliateConversion>();
     public DbSet<SponsoredListing> SponsoredListings => Set<SponsoredListing>();
-
-    protected override void ConfigureConventions(
-        ModelConfigurationBuilder configurationBuilder)
-    {
-        configurationBuilder.Conventions.Remove(
-            typeof(ForeignKeyIndexConvention));
-    }
+    public DbSet<Status> Statuses => Set<Status>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Language>(e =>
+        {
+            e.ToTable("Language", t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_Language_NativeName",
+                    "length(trim(native_name)) > 0");
+            });
+
+            e.HasKey(x => x.LanguageCode).HasName("PK_Language");
+
+            e.Property(x => x.LanguageCode)
+                .HasColumnName("language_code")
+                .HasMaxLength(10)
+                .IsRequired();
+
+            e.Property(x => x.NativeName)
+                .HasColumnName("native_name")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            e.Property(x => x.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired()
+                .HasDefaultValue(true);
+
+            e.HasData(
+                new { LanguageCode = "en", NativeName = "English", IsActive = true },
+                new { LanguageCode = "ar", NativeName = "العربية", IsActive = true });
+        });
+
         modelBuilder.Entity<Category>(e =>
         {
             e.ToTable("Category", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_Category_Name",
-                    "LENGTH(TRIM(\"name\")) > 0");
+                    "CK_Category_Slug",
+                    "length(trim(slug)) > 0");
+
+                t.HasCheckConstraint(
+                    "CK_Category_NotOwnParent",
+                    "parent_category_id IS NULL OR parent_category_id <> category_id");
             });
 
             e.HasKey(x => x.CategoryId).HasName("PK_Category");
 
             e.Property(x => x.CategoryId)
                 .HasColumnName("category_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
+
+            e.Property(x => x.ParentCategoryId)
+                .HasColumnName("parent_category_id")
+                .IsRequired(false);
+
+            e.Property(x => x.Slug)
+                .HasColumnName("slug")
+                .HasMaxLength(150)
+                .IsRequired();
+
+            e.Property(x => x.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired()
+                .HasDefaultValue(true);
+
+            e.HasIndex(x => x.Slug)
+                .HasDatabaseName("UQ_Category_Slug")
+                .IsUnique();
+
+            e.HasOne(x => x.ParentCategory)
+                .WithMany(x => x.ChildCategories)
+                .HasForeignKey(x => x.ParentCategoryId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Category_Category");
+        });
+
+        modelBuilder.Entity<CategoryTranslation>(e =>
+        {
+            e.ToTable("CategoryTranslation", t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_CategoryTranslation_Name",
+                    "length(trim(name)) > 0");
+            });
+
+            e.HasKey(x => new { x.CategoryId, x.LanguageCode }).HasName("PK_CategoryTranslation");
+
+            e.Property(x => x.CategoryId)
+                .HasColumnName("category_id")
+                .IsRequired();
+
+            e.Property(x => x.LanguageCode)
+                .HasColumnName("language_code")
+                .HasMaxLength(10)
+                .IsRequired();
 
             e.Property(x => x.Name)
                 .HasColumnName("name")
-                .HasMaxLength(50);
+                .HasMaxLength(150)
+                .IsRequired();
 
             e.Property(x => x.Description)
                 .HasColumnName("description")
-                .HasMaxLength(255);
+                .HasColumnType("text")
+                .IsRequired(false);
 
-            e.HasAlternateKey(x => x.Name)
-                .HasName("UQ_Category_Name");
+            e.HasOne(x => x.Category)
+                .WithMany(x => x.Translations)
+                .HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_CategoryTranslation_Category");
+
+            e.HasOne(x => x.Language)
+                .WithMany(x => x.CategoryTranslations)
+                .HasForeignKey(x => x.LanguageCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_CategoryTranslation_Language");
         });
 
-        modelBuilder.Entity<Component>(e =>
+        modelBuilder.Entity<Product>(e =>
         {
-            e.ToTable("Component", t =>
+            e.ToTable("Product", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_Component_Brand",
-                    "LENGTH(TRIM(\"brand\")) > 0");
+                    "CK_Product_Specifications",
+                    "specifications IS NULL OR jsonb_typeof(specifications) = 'object'");
 
                 t.HasCheckConstraint(
-                    "CK_Component_Model",
-                    "LENGTH(TRIM(\"model\")) > 0");
-
-                t.HasCheckConstraint(
-                    "CK_Component_Specifications",
-                    "\"specifications\" IS NULL OR jsonb_typeof(\"specifications\") = 'object'");
+                    "CK_Product_Dates",
+                    "updated_at >= created_at");
             });
 
-            e.HasKey(x => x.ComponentId).HasName("PK_Component");
+            e.HasKey(x => x.ProductId).HasName("PK_Product");
 
-            e.Property(x => x.ComponentId)
-                .HasColumnName("component_id")
+            e.Property(x => x.ProductId)
+                .HasColumnName("product_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
-
-            e.Property(x => x.CategoryId)
-                .HasColumnName("category_id");
 
             e.Property(x => x.Brand)
                 .HasColumnName("brand")
-                .HasMaxLength(255);
-
-            e.Property(x => x.Model)
-                .HasColumnName("model")
-                .HasMaxLength(255);
-
-            e.Property(x => x.ManufacturerPartNumber)
-                .HasColumnName("manufacturer_part_number")
-                .HasMaxLength(255);
-
-            e.Property(x => x.Specifications)
-                .HasColumnName("specifications")
-                .HasColumnType("jsonb");
+                .HasMaxLength(150)
+                .IsRequired(false);
 
             e.Property(x => x.ImageUrl)
                 .HasColumnName("image_url")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired(false);
+
+            e.Property(x => x.Specifications)
+                .HasColumnName("specifications")
+                .HasColumnType("jsonb")
+                .IsRequired(false);
+
+            e.Property(x => x.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired()
+                .HasDefaultValue(true);
 
             e.Property(x => x.CreatedAt)
                 .HasColumnName("created_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
-            e.HasOne(x => x.Category)
-                .WithMany(x => x.Components)
-                .HasForeignKey(x => x.CategoryId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_Component_Category");
-
-            e.HasIndex(x => new
-            {
-                x.Brand,
-                x.ManufacturerPartNumber
-            })
-            .HasDatabaseName("UX_Component_Brand_MPN")
-            .IsUnique()
-            .HasFilter("\"manufacturer_part_number\" IS NOT NULL");
+            e.Property(x => x.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
         });
 
-        modelBuilder.Entity<Retailer>(e =>
+        modelBuilder.Entity<ProductTranslation>(e =>
         {
-            e.ToTable("Retailer", t =>
+            e.ToTable("ProductTranslation", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_Retailer_Name",
-                    "LENGTH(TRIM(\"name\")) > 0");
+                    "CK_ProductTranslation_Name",
+                    "length(trim(name)) > 0");
             });
 
-            e.HasKey(x => x.RetailerId).HasName("PK_Retailer");
+            e.HasKey(x => new { x.ProductId, x.LanguageCode }).HasName("PK_ProductTranslation");
 
-            e.Property(x => x.RetailerId)
-                .HasColumnName("retailer_id")
+            e.Property(x => x.ProductId)
+                .HasColumnName("product_id")
+                .IsRequired();
+
+            e.Property(x => x.LanguageCode)
+                .HasColumnName("language_code")
+                .HasMaxLength(10)
+                .IsRequired();
+
+            e.Property(x => x.Name)
+                .HasColumnName("name")
+                .HasMaxLength(255)
+                .IsRequired();
+
+            e.Property(x => x.Description)
+                .HasColumnName("description")
+                .HasColumnType("text")
+                .IsRequired(false);
+
+            e.HasOne(x => x.Product)
+                .WithMany(x => x.Translations)
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ProductTranslation_Product");
+
+            e.HasOne(x => x.Language)
+                .WithMany(x => x.ProductTranslations)
+                .HasForeignKey(x => x.LanguageCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_ProductTranslation_Language");
+        });
+
+        modelBuilder.Entity<ProductCategory>(e =>
+        {
+            e.ToTable("ProductCategory");
+
+            e.HasKey(x => new { x.ProductId, x.CategoryId }).HasName("PK_ProductCategory");
+
+            e.Property(x => x.ProductId)
+                .HasColumnName("product_id")
+                .IsRequired();
+
+            e.Property(x => x.CategoryId)
+                .HasColumnName("category_id")
+                .IsRequired();
+
+            e.HasOne(x => x.Product)
+                .WithMany(x => x.ProductCategories)
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ProductCategory_Product");
+
+            e.HasOne(x => x.Category)
+                .WithMany(x => x.ProductCategories)
+                .HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_ProductCategory_Category");
+        });
+
+        modelBuilder.Entity<ProductVariant>(e =>
+        {
+            e.ToTable("ProductVariant", t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_Variant_Code",
+                    "length(trim(variant_code)) > 0");
+
+                t.HasCheckConstraint(
+                    "CK_Variant_Attributes",
+                    "attributes IS NULL OR jsonb_typeof(attributes) = 'object'");
+            });
+
+            e.HasKey(x => x.VariantId).HasName("PK_ProductVariant");
+
+            e.Property(x => x.VariantId)
+                .HasColumnName("variant_id")
+                .IsRequired()
+                .UseIdentityByDefaultColumn();
+
+            e.Property(x => x.ProductId)
+                .HasColumnName("product_id")
+                .IsRequired();
+
+            e.Property(x => x.VariantCode)
+                .HasColumnName("variant_code")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            e.Property(x => x.Gtin)
+                .HasColumnName("gtin")
+                .HasMaxLength(14)
+                .IsRequired(false);
+
+            e.Property(x => x.ImageUrl)
+                .HasColumnName("image_url")
+                .HasColumnType("text")
+                .IsRequired(false);
+
+            e.Property(x => x.Attributes)
+                .HasColumnName("attributes")
+                .HasColumnType("jsonb")
+                .IsRequired(false);
+
+            e.Property(x => x.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired()
+                .HasDefaultValue(true);
+
+            e.HasIndex(x => x.Gtin)
+                .HasDatabaseName("UQ_ProductVariant_Gtin")
+                .IsUnique();
+
+            e.HasIndex(x => new { x.ProductId, x.VariantCode })
+                .HasDatabaseName("UQ_Variant_ProductCode")
+                .IsUnique();
+
+            e.HasOne(x => x.Product)
+                .WithMany(x => x.Variants)
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_ProductVariant_Product");
+        });
+
+        modelBuilder.Entity<Merchant>(e =>
+        {
+            e.ToTable("Merchant", t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_Merchant_Name",
+                    "length(trim(name)) > 0");
+            });
+
+            e.HasKey(x => x.MerchantId).HasName("PK_Merchant");
+
+            e.Property(x => x.MerchantId)
+                .HasColumnName("merchant_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.Name)
                 .HasColumnName("name")
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .IsRequired();
 
             e.Property(x => x.WebsiteUrl)
                 .HasColumnName("website_url")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired(false);
 
             e.Property(x => x.SupportsAffiliateLinks)
                 .HasColumnName("supports_affiliate_links")
+                .IsRequired()
                 .HasDefaultValue(false);
 
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
+                .IsRequired()
                 .HasDefaultValue(true);
-
-            e.HasAlternateKey(x => x.WebsiteUrl)
-                .HasName("UQ_Retailer_Website");
         });
 
         modelBuilder.Entity<Offer>(e =>
@@ -190,96 +402,103 @@ public class TrackerDbContext : DbContext
             e.ToTable("Offer", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_Offer_Price",
-                    "\"price\" > 0");
+                    "CK_Offer_ProductUrl",
+                    "length(trim(product_url)) > 0");
 
                 t.HasCheckConstraint(
-                    "CK_Offer_ShippingCost",
-                    "\"shipping_cost\" >= 0");
+                    "CK_Offer_Price",
+                    "price > 0");
+
+                t.HasCheckConstraint(
+                    "CK_Offer_Shipping",
+                    "shipping_cost IS NULL OR shipping_cost >= 0");
 
                 t.HasCheckConstraint(
                     "CK_Offer_Currency",
-                    "\"currency\" ~ '^[A-Z]{3}$'");
+                    "currency ~ '^[A-Z]{3}$'");
+
+                t.HasCheckConstraint(
+                    "CK_Offer_Attributes",
+                    "attributes IS NULL OR jsonb_typeof(attributes) = 'object'");
             });
 
             e.HasKey(x => x.OfferId).HasName("PK_Offer");
 
             e.Property(x => x.OfferId)
                 .HasColumnName("offer_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
-            e.Property(x => x.RetailerId)
-                .HasColumnName("retailer_id");
+            e.Property(x => x.MerchantId)
+                .HasColumnName("merchant_id")
+                .IsRequired();
 
-            e.Property(x => x.ComponentId)
-                .HasColumnName("component_id");
+            e.Property(x => x.VariantId)
+                .HasColumnName("variant_id")
+                .IsRequired();
 
-            e.Property(x => x.ExternalProductId)
-                .HasColumnName("external_product_id")
-                .HasMaxLength(150);
+            e.Property(x => x.ExternalOfferId)
+                .HasColumnName("external_offer_id")
+                .HasMaxLength(200)
+                .IsRequired(false);
 
             e.Property(x => x.ProductUrl)
                 .HasColumnName("product_url")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired();
 
             e.Property(x => x.AffiliateUrl)
                 .HasColumnName("affiliate_url")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired(false);
 
             e.Property(x => x.Price)
                 .HasColumnName("price")
-                .HasPrecision(18, 2);
+                .HasPrecision(18, 2)
+                .IsRequired();
 
             e.Property(x => x.ShippingCost)
                 .HasColumnName("shipping_cost")
-                .HasPrecision(18, 2);
+                .HasPrecision(18, 2)
+                .IsRequired(false);
 
             e.Property(x => x.Currency)
                 .HasColumnName("currency")
-                .HasMaxLength(3);
+                .HasMaxLength(3)
+                .IsRequired();
 
             e.Property(x => x.IsAvailable)
-                .HasColumnName("is_available");
+                .HasColumnName("is_available")
+                .IsRequired(false);
+
+            e.Property(x => x.Attributes)
+                .HasColumnName("attributes")
+                .HasColumnType("jsonb")
+                .IsRequired(false);
 
             e.Property(x => x.LastCheckedAt)
-                .HasColumnName("last_checked_at");
+                .HasColumnName("last_checked_at")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired();
 
-            e.HasAlternateKey(x => new
-            {
-                x.RetailerId,
-                x.ProductUrl
-            })
-            .HasName("UQ_Offer_Retailer_ProductUrl");
+            e.HasIndex(x => new { x.MerchantId, x.ExternalOfferId, x.VariantId })
+                .HasDatabaseName("UX_Offer_Merchant_Listing_Variant")
+                .IsUnique();
 
-            e.HasOne(x => x.Retailer)
+            e.HasIndex(x => new { x.VariantId, x.Currency, x.Price })
+                .HasDatabaseName("IX_Offer_PriceComparison");
+
+            e.HasOne(x => x.Merchant)
                 .WithMany(x => x.Offers)
-                .HasForeignKey(x => x.RetailerId)
+                .HasForeignKey(x => x.MerchantId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_Offer_Retailer");
+                .HasConstraintName("FK_Offer_Merchant");
 
-            e.HasOne(x => x.Component)
+            e.HasOne(x => x.Variant)
                 .WithMany(x => x.Offers)
-                .HasForeignKey(x => x.ComponentId)
+                .HasForeignKey(x => x.VariantId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_Offer_Component");
-
-            e.HasIndex(x => new
-            {
-                x.ComponentId,
-                x.Currency,
-                x.Price
-            })
-            .HasDatabaseName("IX_Offer_PriceComparison")
-            .HasFilter("\"is_available\" IS TRUE");
-
-            e.HasIndex(x => new
-            {
-                x.RetailerId,
-                x.ExternalProductId
-            })
-            .HasDatabaseName("UX_Offer_Retailer_ExternalProduct")
-            .IsUnique()
-            .HasFilter("\"external_product_id\" IS NOT NULL");
+                .HasConstraintName("FK_Offer_ProductVariant");
         });
 
         modelBuilder.Entity<PriceHistory>(e =>
@@ -288,48 +507,48 @@ public class TrackerDbContext : DbContext
             {
                 t.HasCheckConstraint(
                     "CK_PriceHistory_Price",
-                    "\"price\" > 0");
+                    "price > 0");
 
                 t.HasCheckConstraint(
                     "CK_PriceHistory_Currency",
-                    "\"currency\" ~ '^[A-Z]{3}$'");
+                    "currency ~ '^[A-Z]{3}$'");
             });
 
-            e.HasKey(x => x.PriceHistoryId)
-                .HasName("PK_PriceHistory");
+            e.HasKey(x => x.PriceHistoryId).HasName("PK_PriceHistory");
 
             e.Property(x => x.PriceHistoryId)
                 .HasColumnName("price_history_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.OfferId)
-                .HasColumnName("offer_id");
+                .HasColumnName("offer_id")
+                .IsRequired();
 
             e.Property(x => x.Price)
                 .HasColumnName("price")
-                .HasPrecision(18, 2);
+                .HasPrecision(18, 2)
+                .IsRequired();
 
             e.Property(x => x.Currency)
                 .HasColumnName("currency")
-                .HasMaxLength(3);
+                .HasMaxLength(3)
+                .IsRequired();
 
             e.Property(x => x.RecordedAt)
                 .HasColumnName("recorded_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
+
+            e.HasIndex(x => new { x.OfferId, x.RecordedAt })
+                .HasDatabaseName("IX_PriceHistory_Offer_Date");
 
             e.HasOne(x => x.Offer)
                 .WithMany(x => x.PriceHistories)
                 .HasForeignKey(x => x.OfferId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_PriceHistory_Offer");
-
-            e.HasIndex(x => new
-            {
-                x.OfferId,
-                x.RecordedAt
-            })
-            .HasDatabaseName("IX_PriceHistory_Offer_RecordedAt")
-            .IsDescending(false, true);
         });
 
         modelBuilder.Entity<User>(e =>
@@ -338,229 +557,363 @@ public class TrackerDbContext : DbContext
             {
                 t.HasCheckConstraint(
                     "CK_User_Name",
-                    "LENGTH(TRIM(\"name\")) > 0");
+                    "length(trim(name)) > 0");
 
                 t.HasCheckConstraint(
                     "CK_User_Email",
-                    "LENGTH(TRIM(\"email\")) > 0");
+                    "length(trim(email)) > 0");
             });
 
             e.HasKey(x => x.UserId).HasName("PK_User");
 
             e.Property(x => x.UserId)
                 .HasColumnName("user_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.Name)
                 .HasColumnName("name")
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .IsRequired();
 
             e.Property(x => x.Email)
                 .HasColumnName("email")
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .IsRequired();
 
             e.Property(x => x.PasswordHash)
                 .HasColumnName("password_hash")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired();
 
-            e.Property(x => x.CreatedAt)
-                .HasColumnName("created_at")
-                .HasDefaultValueSql("NOW()");
+            e.Property(x => x.PreferredLanguageCode)
+                .HasColumnName("preferred_language_code")
+                .HasMaxLength(10)
+                .IsRequired(false);
 
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
+                .IsRequired()
                 .HasDefaultValue(true);
+
+            e.Property(x => x.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
+
+            // UX_User_Email is the unique expression index on LOWER(email).
+            // Npgsql cannot model arbitrary expression indexes in Fluent API.
+            // The initial migration creates it with raw SQL; preserve/recreate it
+            // explicitly when authoring V2 migrations. Do not replace it with a
+            // case-sensitive index or introduce a generated column here.
+
+            e.HasOne(x => x.PreferredLanguage)
+                .WithMany(x => x.Users)
+                .HasForeignKey(x => x.PreferredLanguageCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_User_Language");
         });
 
-        modelBuilder.Entity<PCBuild>(e =>
+        modelBuilder.Entity<SavedCollection>(e =>
         {
-            e.ToTable("PCBuild", t =>
+            e.ToTable("SavedCollection", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_PCBuild_Budget",
-                    "\"budget\" >= 0");
-
-                t.HasCheckConstraint(
-                    "CK_PCBuild_Currency",
-                    "\"currency\" ~ '^[A-Z]{3}$'");
-
-                t.HasCheckConstraint(
-                    "CK_PCBuild_Name",
-                    "LENGTH(TRIM(\"name\")) > 0");
-
-                t.HasCheckConstraint(
-                    "CK_PCBuild_Dates",
-                    "\"updated_at\" >= \"created_at\"");
+                    "CK_Collection_Dates",
+                    "updated_at >= created_at");
             });
 
-            e.HasKey(x => x.BuildId).HasName("PK_PCBuild");
+            e.HasKey(x => x.CollectionId).HasName("PK_SavedCollection");
 
-            e.Property(x => x.BuildId)
-                .HasColumnName("build_id")
+            e.Property(x => x.CollectionId)
+                .HasColumnName("collection_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.UserId)
-                .HasColumnName("user_id");
+                .HasColumnName("user_id")
+                .IsRequired();
 
             e.Property(x => x.Name)
                 .HasColumnName("name")
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .IsRequired();
 
-            e.Property(x => x.Budget)
-                .HasColumnName("budget")
-                .HasPrecision(18, 2);
-
-            e.Property(x => x.Currency)
-                .HasColumnName("currency")
-                .HasMaxLength(3);
+            e.Property(x => x.Description)
+                .HasColumnName("description")
+                .HasColumnType("text")
+                .IsRequired(false);
 
             e.Property(x => x.CreatedAt)
                 .HasColumnName("created_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
             e.Property(x => x.UpdatedAt)
                 .HasColumnName("updated_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
             e.HasOne(x => x.User)
-                .WithMany(x => x.PCBuilds)
+                .WithMany(x => x.SavedCollections)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_PCBuild_User");
+                .HasConstraintName("FK_SavedCollection_User");
         });
 
-        modelBuilder.Entity<PCBuildItem>(e =>
+        modelBuilder.Entity<SavedCollectionItem>(e =>
         {
-            e.ToTable("PCBuildItem", t =>
+            e.ToTable("SavedCollectionItem", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_PCBuildItem_Quantity",
-                    "\"quantity\" > 0");
+                    "CK_CollectionItem_Quantity",
+                    "quantity > 0");
             });
 
-            e.HasKey(x => x.BuildItemId)
-                .HasName("PK_PCBuildItem");
+            e.HasKey(x => x.CollectionItemId).HasName("PK_SavedCollectionItem");
 
-            e.Property(x => x.BuildItemId)
-                .HasColumnName("build_item_id")
+            e.Property(x => x.CollectionItemId)
+                .HasColumnName("collection_item_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
-            e.Property(x => x.BuildId)
-                .HasColumnName("build_id");
+            e.Property(x => x.CollectionId)
+                .HasColumnName("collection_id")
+                .IsRequired();
 
-            e.Property(x => x.ComponentId)
-                .HasColumnName("component_id");
+            e.Property(x => x.VariantId)
+                .HasColumnName("variant_id")
+                .IsRequired();
 
             e.Property(x => x.Quantity)
                 .HasColumnName("quantity")
+                .IsRequired()
                 .HasDefaultValue(1);
 
-            e.HasAlternateKey(x => new
-            {
-                x.BuildId,
-                x.ComponentId
-            })
-            .HasName("UQ_PCBuildItem_Build_Component");
+            e.HasIndex(x => new { x.CollectionId, x.VariantId })
+                .HasDatabaseName("UQ_Collection_Variant")
+                .IsUnique();
 
-            e.HasOne(x => x.Build)
+            e.HasOne(x => x.Collection)
                 .WithMany(x => x.Items)
-                .HasForeignKey(x => x.BuildId)
+                .HasForeignKey(x => x.CollectionId)
                 .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_PCBuildItem_PCBuild");
+                .HasConstraintName("FK_SavedCollectionItem_SavedCollection");
 
-            e.HasOne(x => x.Component)
-                .WithMany(x => x.BuildItems)
-                .HasForeignKey(x => x.ComponentId)
+            e.HasOne(x => x.Variant)
+                .WithMany(x => x.CollectionItems)
+                .HasForeignKey(x => x.VariantId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_PCBuildItem_Component");
+                .HasConstraintName("FK_SavedCollectionItem_ProductVariant");
         });
 
-        modelBuilder.Entity<MagicLink>(e =>
+        modelBuilder.Entity<ShareLink>(e =>
         {
-            e.ToTable("MagicLink", t =>
+            e.ToTable("ShareLink", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_MagicLink_Slug",
-                    "LENGTH(TRIM(\"slug\")) > 0");
+                    "CK_ShareLink_Slug",
+                    "length(trim(slug)) > 0");
 
                 t.HasCheckConstraint(
-                    "CK_MagicLink_ExactlyOneTarget",
-                    "(\"component_id\" IS NOT NULL AND \"build_id\" IS NULL) OR (\"component_id\" IS NULL AND \"build_id\" IS NOT NULL)");
+                    "CK_ShareLink_OneTarget",
+                    "(product_id IS NOT NULL AND collection_id IS NULL) OR (product_id IS NULL AND collection_id IS NOT NULL)");
             });
 
-            e.HasKey(x => x.MagicLinkId)
-                .HasName("PK_MagicLink");
+            e.HasKey(x => x.ShareLinkId).HasName("PK_ShareLink");
 
-            e.Property(x => x.MagicLinkId)
-                .HasColumnName("magic_link_id")
+            e.Property(x => x.ShareLinkId)
+                .HasColumnName("share_link_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
-            e.Property(x => x.ComponentId)
-                .HasColumnName("component_id");
+            e.Property(x => x.ProductId)
+                .HasColumnName("product_id")
+                .IsRequired(false);
 
-            e.Property(x => x.BuildId)
-                .HasColumnName("build_id");
+            e.Property(x => x.CollectionId)
+                .HasColumnName("collection_id")
+                .IsRequired(false);
 
             e.Property(x => x.Slug)
                 .HasColumnName("slug")
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .IsRequired();
 
             e.Property(x => x.CreatedAt)
                 .HasColumnName("created_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
+                .IsRequired()
                 .HasDefaultValue(true);
 
-            e.HasAlternateKey(x => x.Slug)
-                .HasName("UQ_MagicLink_Slug");
+            e.HasIndex(x => x.Slug)
+                .HasDatabaseName("UQ_ShareLink_Slug")
+                .IsUnique();
 
-            e.HasOne(x => x.Component)
-                .WithMany(x => x.MagicLinks)
-                .HasForeignKey(x => x.ComponentId)
+            e.HasOne(x => x.Product)
+                .WithMany(x => x.ShareLinks)
+                .HasForeignKey(x => x.ProductId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_MagicLink_Component");
+                .HasConstraintName("FK_ShareLink_Product");
 
-            e.HasOne(x => x.Build)
-                .WithMany(x => x.MagicLinks)
-                .HasForeignKey(x => x.BuildId)
+            e.HasOne(x => x.Collection)
+                .WithMany(x => x.ShareLinks)
+                .HasForeignKey(x => x.CollectionId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_MagicLink_PCBuild");
+                .HasConstraintName("FK_ShareLink_SavedCollection");
         });
 
-        modelBuilder.Entity<MagicLinkClick>(e =>
+        modelBuilder.Entity<ShareLinkClick>(e =>
         {
-            e.ToTable("MagicLinkClick");
+            e.ToTable("ShareLinkClick");
 
-            e.HasKey(x => x.ClickId)
-                .HasName("PK_MagicLinkClick");
+            e.HasKey(x => x.ClickId).HasName("PK_ShareLinkClick");
 
             e.Property(x => x.ClickId)
                 .HasColumnName("click_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
-            e.Property(x => x.MagicLinkId)
-                .HasColumnName("magic_link_id");
+            e.Property(x => x.ShareLinkId)
+                .HasColumnName("share_link_id")
+                .IsRequired();
 
             e.Property(x => x.OfferId)
-                .HasColumnName("offer_id");
+                .HasColumnName("offer_id")
+                .IsRequired();
 
             e.Property(x => x.ClickedAt)
                 .HasColumnName("clicked_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
-            e.HasOne(x => x.MagicLink)
+            e.HasOne(x => x.ShareLink)
                 .WithMany(x => x.Clicks)
-                .HasForeignKey(x => x.MagicLinkId)
+                .HasForeignKey(x => x.ShareLinkId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_MagicLinkClick_MagicLink");
+                .HasConstraintName("FK_ShareLinkClick_ShareLink");
 
             e.HasOne(x => x.Offer)
-                .WithMany(x => x.MagicLinkClicks)
+                .WithMany(x => x.ShareLinkClicks)
                 .HasForeignKey(x => x.OfferId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_MagicLinkClick_Offer");
+                .HasConstraintName("FK_ShareLinkClick_Offer");
+        });
+
+        modelBuilder.Entity<AffiliateConversion>(e =>
+        {
+            e.ToTable("AffiliateConversion", t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_Conversion_StatusScope",
+                    "status_scope = 'affiliate_conversion'");
+
+                t.HasCheckConstraint(
+                    "CK_Conversion_OrderAmount",
+                    "order_amount IS NULL OR order_amount >= 0");
+
+                t.HasCheckConstraint(
+                    "CK_Conversion_Commission",
+                    "commission_amount >= 0");
+
+                t.HasCheckConstraint(
+                    "CK_Conversion_Currency",
+                    "currency ~ '^[A-Z]{3}$'");
+            });
+
+            e.HasKey(x => x.ConversionId).HasName("PK_AffiliateConversion");
+
+            e.Property(x => x.ConversionId)
+                .HasColumnName("conversion_id")
+                .IsRequired()
+                .UseIdentityByDefaultColumn();
+
+            e.Property(x => x.MerchantId)
+                .HasColumnName("merchant_id")
+                .IsRequired();
+
+            e.Property(x => x.OfferId)
+                .HasColumnName("offer_id")
+                .IsRequired(false);
+
+            e.Property(x => x.ClickId)
+                .HasColumnName("click_id")
+                .IsRequired(false);
+
+            e.Property(x => x.ExternalConversionId)
+                .HasColumnName("external_conversion_id")
+                .HasMaxLength(255)
+                .IsRequired(false);
+
+            e.Property(x => x.OrderAmount)
+                .HasColumnName("order_amount")
+                .HasPrecision(18, 2)
+                .IsRequired(false);
+
+            e.Property(x => x.CommissionAmount)
+                .HasColumnName("commission_amount")
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            e.Property(x => x.Currency)
+                .HasColumnName("currency")
+                .HasMaxLength(3)
+                .IsRequired();
+
+            e.Property(x => x.StatusScope)
+                .HasColumnName("status_scope")
+                .HasMaxLength(50)
+                .IsRequired()
+                .HasDefaultValue("affiliate_conversion");
+
+            e.Property(x => x.StatusCode)
+                .HasColumnName("status_code")
+                .HasMaxLength(50)
+                .IsRequired()
+                .HasDefaultValue("pending");
+
+            e.Property(x => x.ReportedAt)
+                .HasColumnName("reported_at")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
+
+            e.HasIndex(x => new { x.MerchantId, x.ExternalConversionId })
+                .HasDatabaseName("UX_Conversion_Merchant_ExternalId")
+                .IsUnique();
+
+            e.HasOne(x => x.Merchant)
+                .WithMany(x => x.AffiliateConversions)
+                .HasForeignKey(x => x.MerchantId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_AffiliateConversion_Merchant");
+
+            e.HasOne(x => x.Offer)
+                .WithMany(x => x.AffiliateConversions)
+                .HasForeignKey(x => x.OfferId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_AffiliateConversion_Offer");
+
+            e.HasOne(x => x.Click)
+                .WithMany(x => x.AffiliateConversions)
+                .HasForeignKey(x => x.ClickId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_AffiliateConversion_ShareLinkClick");
+
+            e.HasOne(x => x.Status)
+                .WithMany(x => x.AffiliateConversions)
+                .HasForeignKey(x => new { x.StatusScope, x.StatusCode })
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_AffiliateConversion_Status");
         });
 
         modelBuilder.Entity<PriceAlert>(e =>
@@ -568,49 +921,61 @@ public class TrackerDbContext : DbContext
             e.ToTable("PriceAlert", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_PriceAlert_TargetPrice",
-                    "\"target_price\" > 0");
+                    "CK_Alert_TargetPrice",
+                    "target_price > 0");
 
                 t.HasCheckConstraint(
-                    "CK_PriceAlert_Currency",
-                    "\"currency\" ~ '^[A-Z]{3}$'");
+                    "CK_Alert_Currency",
+                    "currency ~ '^[A-Z]{3}$'");
 
                 t.HasCheckConstraint(
-                    "CK_PriceAlert_LastTriggered",
-                    "\"last_triggered_at\" IS NULL OR \"last_triggered_at\" >= \"created_at\"");
+                    "CK_Alert_LastTriggered",
+                    "last_triggered_at IS NULL OR last_triggered_at >= created_at");
             });
 
-            e.HasKey(x => x.AlertId)
-                .HasName("PK_PriceAlert");
+            e.HasKey(x => x.AlertId).HasName("PK_PriceAlert");
 
             e.Property(x => x.AlertId)
                 .HasColumnName("alert_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.UserId)
-                .HasColumnName("user_id");
+                .HasColumnName("user_id")
+                .IsRequired();
 
-            e.Property(x => x.ComponentId)
-                .HasColumnName("component_id");
+            e.Property(x => x.VariantId)
+                .HasColumnName("variant_id")
+                .IsRequired();
 
             e.Property(x => x.TargetPrice)
                 .HasColumnName("target_price")
-                .HasPrecision(18, 2);
+                .HasPrecision(18, 2)
+                .IsRequired();
 
             e.Property(x => x.Currency)
                 .HasColumnName("currency")
-                .HasMaxLength(3);
+                .HasMaxLength(3)
+                .IsRequired();
 
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
+                .IsRequired()
                 .HasDefaultValue(true);
 
             e.Property(x => x.CreatedAt)
                 .HasColumnName("created_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
             e.Property(x => x.LastTriggeredAt)
-                .HasColumnName("last_triggered_at");
+                .HasColumnName("last_triggered_at")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired(false);
+
+            e.HasIndex(x => new { x.VariantId, x.Currency, x.TargetPrice })
+                .HasDatabaseName("IX_PriceAlert_Variant_Currency");
 
             e.HasOne(x => x.User)
                 .WithMany(x => x.PriceAlerts)
@@ -618,63 +983,52 @@ public class TrackerDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_PriceAlert_User");
 
-            e.HasOne(x => x.Component)
+            e.HasOne(x => x.Variant)
                 .WithMany(x => x.PriceAlerts)
-                .HasForeignKey(x => x.ComponentId)
+                .HasForeignKey(x => x.VariantId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_PriceAlert_Component");
-
-            e.HasIndex(x => new
-            {
-                x.ComponentId,
-                x.Currency,
-                x.TargetPrice
-            })
-            .HasDatabaseName("IX_PriceAlert_Active_Component")
-            .HasFilter("\"is_active\" IS TRUE");
+                .HasConstraintName("FK_PriceAlert_ProductVariant");
         });
 
         modelBuilder.Entity<Notification>(e =>
         {
-            e.ToTable("Notification", t =>
-            {
-                t.HasCheckConstraint(
-                    "CK_Notification_Title",
-                    "LENGTH(TRIM(\"title\")) > 0");
+            e.ToTable("Notification");
 
-                t.HasCheckConstraint(
-                    "CK_Notification_Message",
-                    "LENGTH(TRIM(\"message\")) > 0");
-            });
-
-            e.HasKey(x => x.NotificationId)
-                .HasName("PK_Notification");
+            e.HasKey(x => x.NotificationId).HasName("PK_Notification");
 
             e.Property(x => x.NotificationId)
                 .HasColumnName("notification_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.UserId)
-                .HasColumnName("user_id");
+                .HasColumnName("user_id")
+                .IsRequired();
 
             e.Property(x => x.AlertId)
-                .HasColumnName("alert_id");
+                .HasColumnName("alert_id")
+                .IsRequired(false);
 
             e.Property(x => x.Title)
                 .HasColumnName("title")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired();
 
             e.Property(x => x.Message)
                 .HasColumnName("message")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired();
 
             e.Property(x => x.IsRead)
                 .HasColumnName("is_read")
+                .IsRequired()
                 .HasDefaultValue(false);
 
             e.Property(x => x.CreatedAt)
                 .HasColumnName("created_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
             e.HasOne(x => x.User)
                 .WithMany(x => x.Notifications)
@@ -694,56 +1048,72 @@ public class TrackerDbContext : DbContext
             e.ToTable("CrawlRun", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_CrawlRun_ProductsFound",
-                    "\"products_found\" >= 0");
+                    "CK_CrawlRun_StatusScope",
+                    "status_scope = 'crawl_run'");
 
                 t.HasCheckConstraint(
-                    "CK_CrawlRun_Status",
-                    "\"status\" IN ('Pending','Running','Completed','Failed')");
+                    "CK_CrawlRun_ProductsFound",
+                    "products_found >= 0");
 
                 t.HasCheckConstraint(
                     "CK_CrawlRun_Dates",
-                    "\"finished_at\" IS NULL OR (\"started_at\" IS NOT NULL AND \"finished_at\" >= \"started_at\")");
-
-                t.HasCheckConstraint(
-                    "CK_CrawlRun_Completion",
-                    "(\"status\" = 'Pending' AND \"started_at\" IS NULL AND \"finished_at\" IS NULL) OR (\"status\" = 'Running' AND \"started_at\" IS NOT NULL AND \"finished_at\" IS NULL) OR (\"status\" IN ('Completed','Failed') AND \"started_at\" IS NOT NULL AND \"finished_at\" IS NOT NULL)");
+                    "finished_at IS NULL OR (started_at IS NOT NULL AND finished_at >= started_at)");
             });
 
-            e.HasKey(x => x.CrawlRunId)
-                .HasName("PK_CrawlRun");
+            e.HasKey(x => x.CrawlRunId).HasName("PK_CrawlRun");
 
             e.Property(x => x.CrawlRunId)
                 .HasColumnName("crawl_run_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
-            e.Property(x => x.RetailerId)
-                .HasColumnName("retailer_id");
+            e.Property(x => x.MerchantId)
+                .HasColumnName("merchant_id")
+                .IsRequired();
 
             e.Property(x => x.StartedAt)
-                .HasColumnName("started_at");
+                .HasColumnName("started_at")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired(false);
 
             e.Property(x => x.FinishedAt)
-                .HasColumnName("finished_at");
+                .HasColumnName("finished_at")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired(false);
 
-            e.Property(x => x.Status)
-                .HasColumnName("status")
-                .HasMaxLength(30)
-                .HasDefaultValue("Pending");
+            e.Property(x => x.StatusScope)
+                .HasColumnName("status_scope")
+                .HasMaxLength(50)
+                .IsRequired()
+                .HasDefaultValue("crawl_run");
+
+            e.Property(x => x.StatusCode)
+                .HasColumnName("status_code")
+                .HasMaxLength(50)
+                .IsRequired()
+                .HasDefaultValue("pending");
 
             e.Property(x => x.ProductsFound)
                 .HasColumnName("products_found")
+                .IsRequired()
                 .HasDefaultValue(0);
 
             e.Property(x => x.ErrorMessage)
                 .HasColumnName("error_message")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired(false);
 
-            e.HasOne(x => x.Retailer)
+            e.HasOne(x => x.Merchant)
                 .WithMany(x => x.CrawlRuns)
-                .HasForeignKey(x => x.RetailerId)
+                .HasForeignKey(x => x.MerchantId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_CrawlRun_Retailer");
+                .HasConstraintName("FK_CrawlRun_Merchant");
+
+            e.HasOne(x => x.Status)
+                .WithMany(x => x.CrawlRuns)
+                .HasForeignKey(x => new { x.StatusScope, x.StatusCode })
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_CrawlRun_Status");
         });
 
         modelBuilder.Entity<CrawledListing>(e =>
@@ -751,75 +1121,88 @@ public class TrackerDbContext : DbContext
             e.ToTable("CrawledListing", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_CrawledListing_Price",
-                    "\"price\" > 0");
+                    "CK_Listing_StatusScope",
+                    "status_scope = 'listing_match'");
 
                 t.HasCheckConstraint(
-                    "CK_CrawledListing_Currency",
-                    "\"currency\" IS NULL OR \"currency\" ~ '^[A-Z]{3}$'");
+                    "CK_Listing_Price",
+                    "price IS NULL OR price > 0");
 
                 t.HasCheckConstraint(
-                    "CK_CrawledListing_PriceCurrency",
-                    "\"price\" IS NULL OR \"currency\" IS NOT NULL");
+                    "CK_Listing_PriceCurrency",
+                    "price IS NULL OR currency IS NOT NULL");
 
                 t.HasCheckConstraint(
-                    "CK_CrawledListing_Status",
-                    "\"match_status\" IN ('Pending','Matched','Unmatched','Review')");
+                    "CK_Listing_Currency",
+                    "currency IS NULL OR currency ~ '^[A-Z]{3}$'");
 
                 t.HasCheckConstraint(
-                    "CK_CrawledListing_MatchedComponent",
-                    "\"match_status\" <> 'Matched' OR \"component_id\" IS NOT NULL");
-
-                t.HasCheckConstraint(
-                    "CK_CrawledListing_Specifications",
-                    "\"raw_specifications\" IS NULL OR jsonb_typeof(\"raw_specifications\") = 'object'");
+                    "CK_Listing_Specifications",
+                    "raw_specifications IS NULL OR jsonb_typeof(raw_specifications) = 'object'");
             });
 
-            e.HasKey(x => x.ListingId)
-                .HasName("PK_CrawledListing");
+            e.HasKey(x => x.ListingId).HasName("PK_CrawledListing");
 
             e.Property(x => x.ListingId)
                 .HasColumnName("listing_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.CrawlRunId)
-                .HasColumnName("crawl_run_id");
+                .HasColumnName("crawl_run_id")
+                .IsRequired();
 
-            e.Property(x => x.ComponentId)
-                .HasColumnName("component_id");
+            e.Property(x => x.MatchedVariantId)
+                .HasColumnName("matched_variant_id")
+                .IsRequired(false);
 
             e.Property(x => x.ProductName)
                 .HasColumnName("product_name")
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .IsRequired();
 
-            e.Property(x => x.ExternalProductId)
-                .HasColumnName("external_product_id")
-                .HasMaxLength(255);
+            e.Property(x => x.ExternalOfferId)
+                .HasColumnName("external_offer_id")
+                .HasMaxLength(200)
+                .IsRequired(false);
 
             e.Property(x => x.ProductUrl)
                 .HasColumnName("product_url")
-                .HasColumnType("text");
+                .HasColumnType("text")
+                .IsRequired();
 
             e.Property(x => x.Price)
                 .HasColumnName("price")
-                .HasPrecision(18, 2);
+                .HasPrecision(18, 2)
+                .IsRequired(false);
 
             e.Property(x => x.Currency)
                 .HasColumnName("currency")
-                .HasMaxLength(3);
+                .HasMaxLength(3)
+                .IsRequired(false);
 
             e.Property(x => x.RawSpecifications)
                 .HasColumnName("raw_specifications")
-                .HasColumnType("jsonb");
+                .HasColumnType("jsonb")
+                .IsRequired(false);
 
-            e.Property(x => x.MatchStatus)
-                .HasColumnName("match_status")
-                .HasMaxLength(30)
-                .HasDefaultValue("Pending");
+            e.Property(x => x.StatusScope)
+                .HasColumnName("status_scope")
+                .HasMaxLength(50)
+                .IsRequired()
+                .HasDefaultValue("listing_match");
+
+            e.Property(x => x.StatusCode)
+                .HasColumnName("status_code")
+                .HasMaxLength(50)
+                .IsRequired()
+                .HasDefaultValue("pending");
 
             e.Property(x => x.CrawledAt)
                 .HasColumnName("crawled_at")
-                .HasDefaultValueSql("NOW()");
+                .HasColumnType("timestamp with time zone")
+                .IsRequired()
+                .HasDefaultValueSql("now()");
 
             e.HasOne(x => x.CrawlRun)
                 .WithMany(x => x.Listings)
@@ -827,100 +1210,17 @@ public class TrackerDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_CrawledListing_CrawlRun");
 
-            e.HasOne(x => x.Component)
+            e.HasOne(x => x.MatchedVariant)
                 .WithMany(x => x.CrawledListings)
-                .HasForeignKey(x => x.ComponentId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_CrawledListing_Component");
-        });
-
-        modelBuilder.Entity<AffiliateConversion>(e =>
-        {
-            e.ToTable("AffiliateConversion", t =>
-            {
-                t.HasCheckConstraint(
-                    "CK_AffiliateConversion_OrderAmount",
-                    "\"order_amount\" >= 0");
-
-                t.HasCheckConstraint(
-                    "CK_AffiliateConversion_Commission",
-                    "\"commission_amount\" >= 0");
-
-                t.HasCheckConstraint(
-                    "CK_AffiliateConversion_Currency",
-                    "\"currency\" ~ '^[A-Z]{3}$'");
-
-                t.HasCheckConstraint(
-                    "CK_AffiliateConversion_Status",
-                    "\"status\" IN ('Pending','Approved','Rejected','Paid')");
-            });
-
-            e.HasKey(x => x.ConversionId)
-                .HasName("PK_AffiliateConversion");
-
-            e.Property(x => x.ConversionId)
-                .HasColumnName("conversion_id")
-                .UseIdentityByDefaultColumn();
-
-            e.Property(x => x.RetailerId)
-                .HasColumnName("retailer_id");
-
-            e.Property(x => x.OfferId)
-                .HasColumnName("offer_id");
-
-            e.Property(x => x.ClickId)
-                .HasColumnName("click_id");
-
-            e.Property(x => x.ExternalConversionId)
-                .HasColumnName("external_conversion_id")
-                .HasMaxLength(255);
-
-            e.Property(x => x.OrderAmount)
-                .HasColumnName("order_amount")
-                .HasPrecision(18, 2);
-
-            e.Property(x => x.CommissionAmount)
-                .HasColumnName("commission_amount")
-                .HasPrecision(18, 2);
-
-            e.Property(x => x.Currency)
-                .HasColumnName("currency")
-                .HasMaxLength(3);
-
-            e.Property(x => x.Status)
-                .HasColumnName("status")
-                .HasMaxLength(30)
-                .HasDefaultValue("Pending");
-
-            e.Property(x => x.ReportedAt)
-                .HasColumnName("reported_at");
-
-            e.HasOne(x => x.Retailer)
-                .WithMany(x => x.AffiliateConversions)
-                .HasForeignKey(x => x.RetailerId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_AffiliateConversion_Retailer");
-
-            e.HasOne(x => x.Offer)
-                .WithMany(x => x.AffiliateConversions)
-                .HasForeignKey(x => x.OfferId)
+                .HasForeignKey(x => x.MatchedVariantId)
                 .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_AffiliateConversion_Offer");
+                .HasConstraintName("FK_CrawledListing_ProductVariant");
 
-            e.HasOne(x => x.Click)
-                .WithMany(x => x.AffiliateConversions)
-                .HasForeignKey(x => x.ClickId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_AffiliateConversion_Click");
-
-            e.HasIndex(x => new
-            {
-                x.RetailerId,
-                x.ExternalConversionId
-            })
-            .HasDatabaseName("UX_AffiliateConversion_External")
-            .IsUnique()
-            .HasFilter("\"external_conversion_id\" IS NOT NULL");
+            e.HasOne(x => x.Status)
+                .WithMany(x => x.CrawledListings)
+                .HasForeignKey(x => new { x.StatusScope, x.StatusCode })
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_CrawledListing_Status");
         });
 
         modelBuilder.Entity<SponsoredListing>(e =>
@@ -928,44 +1228,52 @@ public class TrackerDbContext : DbContext
             e.ToTable("SponsoredListing", t =>
             {
                 t.HasCheckConstraint(
-                    "CK_SponsoredListing_Dates",
-                    "\"end_date\" > \"start_date\"");
+                    "CK_Sponsored_Dates",
+                    "end_date > start_date");
 
                 t.HasCheckConstraint(
-                    "CK_SponsoredListing_Fee",
-                    "\"sponsorship_fee\" >= 0");
+                    "CK_Sponsored_Fee",
+                    "sponsorship_fee IS NULL OR sponsorship_fee >= 0");
 
                 t.HasCheckConstraint(
-                    "CK_SponsoredListing_Currency",
-                    "\"currency\" ~ '^[A-Z]{3}$'");
+                    "CK_Sponsored_Currency",
+                    "currency ~ '^[A-Z]{3}$'");
             });
 
-            e.HasKey(x => x.SponsoredListingId)
-                .HasName("PK_SponsoredListing");
+            e.HasKey(x => x.SponsoredListingId).HasName("PK_SponsoredListing");
 
             e.Property(x => x.SponsoredListingId)
                 .HasColumnName("sponsored_listing_id")
+                .IsRequired()
                 .UseIdentityByDefaultColumn();
 
             e.Property(x => x.OfferId)
-                .HasColumnName("offer_id");
+                .HasColumnName("offer_id")
+                .IsRequired();
 
             e.Property(x => x.StartDate)
-                .HasColumnName("start_date");
+                .HasColumnName("start_date")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired();
 
             e.Property(x => x.EndDate)
-                .HasColumnName("end_date");
+                .HasColumnName("end_date")
+                .HasColumnType("timestamp with time zone")
+                .IsRequired();
 
             e.Property(x => x.SponsorshipFee)
                 .HasColumnName("sponsorship_fee")
-                .HasPrecision(18, 2);
+                .HasPrecision(18, 2)
+                .IsRequired(false);
 
             e.Property(x => x.Currency)
                 .HasColumnName("currency")
-                .HasMaxLength(3);
+                .HasMaxLength(3)
+                .IsRequired();
 
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
+                .IsRequired()
                 .HasDefaultValue(true);
 
             e.HasOne(x => x.Offer)
@@ -973,6 +1281,68 @@ public class TrackerDbContext : DbContext
                 .HasForeignKey(x => x.OfferId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_SponsoredListing_Offer");
+        });
+
+        modelBuilder.Entity<Status>(e =>
+        {
+            e.ToTable("Status", t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_Status_LabelEn",
+                    "length(trim(label_en)) > 0");
+
+                t.HasCheckConstraint(
+                    "CK_Status_LabelAr",
+                    "length(trim(label_ar)) > 0");
+            });
+
+            e.HasKey(x => new { x.Scope, x.Code }).HasName("PK_Status");
+
+            e.Property(x => x.Scope)
+                .HasColumnName("scope")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            e.Property(x => x.Code)
+                .HasColumnName("code")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            e.Property(x => x.LabelEn)
+                .HasColumnName("label_en")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            e.Property(x => x.LabelAr)
+                .HasColumnName("label_ar")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            e.Property(x => x.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired()
+                .HasDefaultValue(true);
+
+            e.Property(x => x.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired()
+                .HasDefaultValue(0);
+
+            e.HasData(
+                new { Scope = "crawl_run", Code = "pending", LabelEn = "Pending", LabelAr = "قيد الانتظار", IsActive = true, SortOrder = 0 },
+                new { Scope = "crawl_run", Code = "running", LabelEn = "Running", LabelAr = "قيد التنفيذ", IsActive = true, SortOrder = 10 },
+                new { Scope = "crawl_run", Code = "completed", LabelEn = "Completed", LabelAr = "مكتمل", IsActive = true, SortOrder = 20 },
+                new { Scope = "crawl_run", Code = "failed", LabelEn = "Failed", LabelAr = "فشل", IsActive = true, SortOrder = 30 },
+
+                new { Scope = "listing_match", Code = "pending", LabelEn = "Pending", LabelAr = "قيد الانتظار", IsActive = true, SortOrder = 0 },
+                new { Scope = "listing_match", Code = "matched", LabelEn = "Matched", LabelAr = "مطابق", IsActive = true, SortOrder = 10 },
+                new { Scope = "listing_match", Code = "unmatched", LabelEn = "Unmatched", LabelAr = "غير مطابق", IsActive = true, SortOrder = 20 },
+                new { Scope = "listing_match", Code = "review", LabelEn = "Needs review", LabelAr = "يحتاج مراجعة", IsActive = true, SortOrder = 30 },
+
+                new { Scope = "affiliate_conversion", Code = "pending", LabelEn = "Pending", LabelAr = "قيد الانتظار", IsActive = true, SortOrder = 0 },
+                new { Scope = "affiliate_conversion", Code = "approved", LabelEn = "Approved", LabelAr = "تمت الموافقة", IsActive = true, SortOrder = 10 },
+                new { Scope = "affiliate_conversion", Code = "rejected", LabelEn = "Rejected", LabelAr = "مرفوض", IsActive = true, SortOrder = 20 },
+                new { Scope = "affiliate_conversion", Code = "paid", LabelEn = "Paid", LabelAr = "مدفوع", IsActive = true, SortOrder = 30 });
         });
     }
 }

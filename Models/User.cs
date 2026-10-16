@@ -4,12 +4,15 @@ public class User
     public string Name { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string PasswordHash { get; set; } = null!;
+    public string? PreferredLanguageCode { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public bool IsActive { get; set; } = true;
 
-    public ICollection<PCBuild> PCBuilds { get; set; }
-        = new List<PCBuild>();
+    public Language? PreferredLanguage { get; set; }
+
+    public ICollection<SavedCollection> SavedCollections { get; set; }
+        = new List<SavedCollection>();
 
     public ICollection<PriceAlert> PriceAlerts { get; set; }
         = new List<PriceAlert>();
