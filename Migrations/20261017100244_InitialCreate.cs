@@ -23,11 +23,17 @@ namespace Tracker.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     parent_category_id = table.Column<int>(type: "integer", nullable: true),
                     slug = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    name_en = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    name_ar = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    description_en = table.Column<string>(type: "text", nullable: true),
+                    description_ar = table.Column<string>(type: "text", nullable: true),
                     is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Category", x => x.category_id);
+                    table.CheckConstraint("CK_Category_NameAr", "length(trim(name_ar)) > 0");
+                    table.CheckConstraint("CK_Category_NameEn", "length(trim(name_en)) > 0");
                     table.CheckConstraint("CK_Category_NotOwnParent", "parent_category_id IS NULL OR parent_category_id <> category_id");
                     table.CheckConstraint("CK_Category_Slug", "length(trim(slug)) > 0");
                     table.ForeignKey(
@@ -75,6 +81,10 @@ namespace Tracker.Migrations
                 {
                     product_id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    name_en = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    name_ar = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    description_en = table.Column<string>(type: "text", nullable: true),
+                    description_ar = table.Column<string>(type: "text", nullable: true),
                     brand = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
                     image_url = table.Column<string>(type: "text", nullable: true),
                     specifications = table.Column<JsonDocument>(type: "jsonb", nullable: true),
@@ -86,6 +96,8 @@ namespace Tracker.Migrations
                 {
                     table.PrimaryKey("PK_Product", x => x.product_id);
                     table.CheckConstraint("CK_Product_Dates", "updated_at >= created_at");
+                    table.CheckConstraint("CK_Product_NameAr", "length(trim(name_ar)) > 0");
+                    table.CheckConstraint("CK_Product_NameEn", "length(trim(name_en)) > 0");
                     table.CheckConstraint("CK_Product_Specifications", "specifications IS NULL OR jsonb_typeof(specifications) = 'object'");
                 });
 
@@ -105,33 +117,6 @@ namespace Tracker.Migrations
                     table.PrimaryKey("PK_Status", x => new { x.scope, x.code });
                     table.CheckConstraint("CK_Status_LabelAr", "length(trim(label_ar)) > 0");
                     table.CheckConstraint("CK_Status_LabelEn", "length(trim(label_en)) > 0");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CategoryTranslation",
-                columns: table => new
-                {
-                    category_id = table.Column<int>(type: "integer", nullable: false),
-                    language_code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    description = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CategoryTranslation", x => new { x.category_id, x.language_code });
-                    table.CheckConstraint("CK_CategoryTranslation_Name", "length(trim(name)) > 0");
-                    table.ForeignKey(
-                        name: "FK_CategoryTranslation_Category",
-                        column: x => x.category_id,
-                        principalTable: "Category",
-                        principalColumn: "category_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_CategoryTranslation_Language",
-                        column: x => x.language_code,
-                        principalTable: "Language",
-                        principalColumn: "language_code",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -178,33 +163,6 @@ namespace Tracker.Migrations
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_ProductCategory_Product",
-                        column: x => x.product_id,
-                        principalTable: "Product",
-                        principalColumn: "product_id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ProductTranslation",
-                columns: table => new
-                {
-                    product_id = table.Column<int>(type: "integer", nullable: false),
-                    language_code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    description = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ProductTranslation", x => new { x.product_id, x.language_code });
-                    table.CheckConstraint("CK_ProductTranslation_Name", "length(trim(name)) > 0");
-                    table.ForeignKey(
-                        name: "FK_ProductTranslation_Language",
-                        column: x => x.language_code,
-                        principalTable: "Language",
-                        principalColumn: "language_code",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ProductTranslation_Product",
                         column: x => x.product_id,
                         principalTable: "Product",
                         principalColumn: "product_id",
@@ -726,11 +684,6 @@ namespace Tracker.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_CategoryTranslation_language_code",
-                table: "CategoryTranslation",
-                column: "language_code");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_CrawledListing_crawl_run_id",
                 table: "CrawledListing",
                 column: "crawl_run_id");
@@ -797,11 +750,6 @@ namespace Tracker.Migrations
                 column: "category_id");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ProductTranslation_language_code",
-                table: "ProductTranslation",
-                column: "language_code");
-
-            migrationBuilder.CreateIndex(
                 name: "UQ_ProductVariant_Gtin",
                 table: "ProductVariant",
                 column: "gtin",
@@ -860,11 +808,6 @@ namespace Tracker.Migrations
                 table: "SponsoredListing",
                 column: "offer_id");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_User_preferred_language_code",
-                table: "User",
-                column: "preferred_language_code");
-
             // Expression indexes are not represented in the EF Core model snapshot.
             migrationBuilder.Sql(
                 "CREATE UNIQUE INDEX \"UX_User_Email\" ON \"User\" (LOWER(\"email\"));");
@@ -880,9 +823,6 @@ namespace Tracker.Migrations
                 name: "AffiliateConversion");
 
             migrationBuilder.DropTable(
-                name: "CategoryTranslation");
-
-            migrationBuilder.DropTable(
                 name: "CrawledListing");
 
             migrationBuilder.DropTable(
@@ -893,9 +833,6 @@ namespace Tracker.Migrations
 
             migrationBuilder.DropTable(
                 name: "ProductCategory");
-
-            migrationBuilder.DropTable(
-                name: "ProductTranslation");
 
             migrationBuilder.DropTable(
                 name: "SavedCollectionItem");

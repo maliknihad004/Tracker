@@ -121,11 +121,31 @@ namespace Tracker.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CategoryId"));
 
+                    b.Property<string>("DescriptionAr")
+                        .HasColumnType("text")
+                        .HasColumnName("description_ar");
+
+                    b.Property<string>("DescriptionEn")
+                        .HasColumnType("text")
+                        .HasColumnName("description_en");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name_ar");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name_en");
 
                     b.Property<int?>("ParentCategoryId")
                         .HasColumnType("integer")
@@ -148,41 +168,13 @@ namespace Tracker.Migrations
 
                     b.ToTable("Category", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Category_NameAr", "length(trim(name_ar)) > 0");
+
+                            t.HasCheckConstraint("CK_Category_NameEn", "length(trim(name_en)) > 0");
+
                             t.HasCheckConstraint("CK_Category_NotOwnParent", "parent_category_id IS NULL OR parent_category_id <> category_id");
 
                             t.HasCheckConstraint("CK_Category_Slug", "length(trim(slug)) > 0");
-                        });
-                });
-
-            modelBuilder.Entity("CategoryTranslation", b =>
-                {
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("integer")
-                        .HasColumnName("category_id");
-
-                    b.Property<string>("LanguageCode")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("language_code");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("name");
-
-                    b.HasKey("CategoryId", "LanguageCode")
-                        .HasName("PK_CategoryTranslation");
-
-                    b.HasIndex("LanguageCode");
-
-                    b.ToTable("CategoryTranslation", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_CategoryTranslation_Name", "length(trim(name)) > 0");
                         });
                 });
 
@@ -682,6 +674,14 @@ namespace Tracker.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("DescriptionAr")
+                        .HasColumnType("text")
+                        .HasColumnName("description_ar");
+
+                    b.Property<string>("DescriptionEn")
+                        .HasColumnType("text")
+                        .HasColumnName("description_en");
+
                     b.Property<string>("ImageUrl")
                         .HasColumnType("text")
                         .HasColumnName("image_url");
@@ -691,6 +691,18 @@ namespace Tracker.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name_ar");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name_en");
 
                     b.Property<JsonDocument>("Specifications")
                         .HasColumnType("jsonb")
@@ -708,6 +720,10 @@ namespace Tracker.Migrations
                     b.ToTable("Product", null, t =>
                         {
                             t.HasCheckConstraint("CK_Product_Dates", "updated_at >= created_at");
+
+                            t.HasCheckConstraint("CK_Product_NameAr", "length(trim(name_ar)) > 0");
+
+                            t.HasCheckConstraint("CK_Product_NameEn", "length(trim(name_en)) > 0");
 
                             t.HasCheckConstraint("CK_Product_Specifications", "specifications IS NULL OR jsonb_typeof(specifications) = 'object'");
                         });
@@ -729,38 +745,6 @@ namespace Tracker.Migrations
                     b.HasIndex("CategoryId");
 
                     b.ToTable("ProductCategory", (string)null);
-                });
-
-            modelBuilder.Entity("ProductTranslation", b =>
-                {
-                    b.Property<int>("ProductId")
-                        .HasColumnType("integer")
-                        .HasColumnName("product_id");
-
-                    b.Property<string>("LanguageCode")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("language_code");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("name");
-
-                    b.HasKey("ProductId", "LanguageCode")
-                        .HasName("PK_ProductTranslation");
-
-                    b.HasIndex("LanguageCode");
-
-                    b.ToTable("ProductTranslation", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ProductTranslation_Name", "length(trim(name)) > 0");
-                        });
                 });
 
             modelBuilder.Entity("ProductVariant", b =>
@@ -1247,8 +1231,6 @@ namespace Tracker.Migrations
                     b.HasKey("UserId")
                         .HasName("PK_User");
 
-                    b.HasIndex("PreferredLanguageCode");
-
                     b.ToTable("User", null, t =>
                         {
                             t.HasCheckConstraint("CK_User_Email", "length(trim(email)) > 0");
@@ -1303,27 +1285,6 @@ namespace Tracker.Migrations
                         .HasConstraintName("FK_Category_Category");
 
                     b.Navigation("ParentCategory");
-                });
-
-            modelBuilder.Entity("CategoryTranslation", b =>
-                {
-                    b.HasOne("Category", "Category")
-                        .WithMany("Translations")
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_CategoryTranslation_Category");
-
-                    b.HasOne("Language", "Language")
-                        .WithMany("CategoryTranslations")
-                        .HasForeignKey("LanguageCode")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("FK_CategoryTranslation_Language");
-
-                    b.Navigation("Category");
-
-                    b.Navigation("Language");
                 });
 
             modelBuilder.Entity("CrawlRun", b =>
@@ -1471,27 +1432,6 @@ namespace Tracker.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("ProductTranslation", b =>
-                {
-                    b.HasOne("Language", "Language")
-                        .WithMany("ProductTranslations")
-                        .HasForeignKey("LanguageCode")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("FK_ProductTranslation_Language");
-
-                    b.HasOne("Product", "Product")
-                        .WithMany("Translations")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_ProductTranslation_Product");
-
-                    b.Navigation("Language");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("ProductVariant", b =>
                 {
                     b.HasOne("Product", "Product")
@@ -1605,8 +1545,6 @@ namespace Tracker.Migrations
                     b.Navigation("ChildCategories");
 
                     b.Navigation("ProductCategories");
-
-                    b.Navigation("Translations");
                 });
 
             modelBuilder.Entity("CrawlRun", b =>
@@ -1616,10 +1554,6 @@ namespace Tracker.Migrations
 
             modelBuilder.Entity("Language", b =>
                 {
-                    b.Navigation("CategoryTranslations");
-
-                    b.Navigation("ProductTranslations");
-
                     b.Navigation("Users");
                 });
 
@@ -1653,8 +1587,6 @@ namespace Tracker.Migrations
                     b.Navigation("ProductCategories");
 
                     b.Navigation("ShareLinks");
-
-                    b.Navigation("Translations");
 
                     b.Navigation("Variants");
                 });

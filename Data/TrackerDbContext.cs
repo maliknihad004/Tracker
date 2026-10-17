@@ -1,4 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using DotNetEnv;
 
 namespace Tracker.Data;
@@ -31,9 +36,7 @@ public class TrackerDbContext : DbContext
 
     public DbSet<Language> Languages => Set<Language>();
     public DbSet<Category> Categories => Set<Category>();
-    public DbSet<CategoryTranslation> CategoryTranslations => Set<CategoryTranslation>();
     public DbSet<Product> Products => Set<Product>();
-    public DbSet<ProductTranslation> ProductTranslations => Set<ProductTranslation>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<Merchant> Merchants => Set<Merchant>();
@@ -51,6 +54,35 @@ public class TrackerDbContext : DbContext
     public DbSet<CrawledListing> CrawledListings => Set<CrawledListing>();
     public DbSet<SponsoredListing> SponsoredListings => Set<SponsoredListing>();
     public DbSet<Status> Statuses => Set<Status>();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Conventions.Replace<ForeignKeyIndexConvention>(services =>
+            new CatalogForeignKeyIndexConvention(
+                services.GetRequiredService<ProviderConventionSetBuilderDependencies>()));
+    }
+
+    private sealed class CatalogForeignKeyIndexConvention(
+        ProviderConventionSetBuilderDependencies dependencies) : ForeignKeyIndexConvention(dependencies)
+    {
+        protected override IConventionIndex? CreateIndex(
+            IReadOnlyList<IConventionProperty> properties,
+            bool unique,
+            IConventionEntityTypeBuilder entityTypeBuilder)
+        {
+            // Users are looked up by ID/email, not by locale. Language is reference data.
+            // Keep normal FK index conventions for every other relationship.
+            if (!unique
+                && entityTypeBuilder.Metadata.ClrType == typeof(User)
+                && properties.Count == 1
+                && properties[0].Name == nameof(User.PreferredLanguageCode))
+            {
+                return null;
+            }
+
+            return base.CreateIndex(properties, unique, entityTypeBuilder);
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -94,6 +126,14 @@ public class TrackerDbContext : DbContext
                     "length(trim(slug)) > 0");
 
                 t.HasCheckConstraint(
+                    "CK_Category_NameEn",
+                    "length(trim(name_en)) > 0");
+
+                t.HasCheckConstraint(
+                    "CK_Category_NameAr",
+                    "length(trim(name_ar)) > 0");
+
+                t.HasCheckConstraint(
                     "CK_Category_NotOwnParent",
                     "parent_category_id IS NULL OR parent_category_id <> category_id");
             });
@@ -114,6 +154,26 @@ public class TrackerDbContext : DbContext
                 .HasMaxLength(150)
                 .IsRequired();
 
+            e.Property(x => x.NameEn)
+                .HasColumnName("name_en")
+                .HasMaxLength(150)
+                .IsRequired();
+
+            e.Property(x => x.NameAr)
+                .HasColumnName("name_ar")
+                .HasMaxLength(150)
+                .IsRequired();
+
+            e.Property(x => x.DescriptionEn)
+                .HasColumnName("description_en")
+                .HasColumnType("text")
+                .IsRequired(false);
+
+            e.Property(x => x.DescriptionAr)
+                .HasColumnName("description_ar")
+                .HasColumnType("text")
+                .IsRequired(false);
+
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
                 .IsRequired()
@@ -130,49 +190,6 @@ public class TrackerDbContext : DbContext
                 .HasConstraintName("FK_Category_Category");
         });
 
-        modelBuilder.Entity<CategoryTranslation>(e =>
-        {
-            e.ToTable("CategoryTranslation", t =>
-            {
-                t.HasCheckConstraint(
-                    "CK_CategoryTranslation_Name",
-                    "length(trim(name)) > 0");
-            });
-
-            e.HasKey(x => new { x.CategoryId, x.LanguageCode }).HasName("PK_CategoryTranslation");
-
-            e.Property(x => x.CategoryId)
-                .HasColumnName("category_id")
-                .IsRequired();
-
-            e.Property(x => x.LanguageCode)
-                .HasColumnName("language_code")
-                .HasMaxLength(10)
-                .IsRequired();
-
-            e.Property(x => x.Name)
-                .HasColumnName("name")
-                .HasMaxLength(150)
-                .IsRequired();
-
-            e.Property(x => x.Description)
-                .HasColumnName("description")
-                .HasColumnType("text")
-                .IsRequired(false);
-
-            e.HasOne(x => x.Category)
-                .WithMany(x => x.Translations)
-                .HasForeignKey(x => x.CategoryId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_CategoryTranslation_Category");
-
-            e.HasOne(x => x.Language)
-                .WithMany(x => x.CategoryTranslations)
-                .HasForeignKey(x => x.LanguageCode)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_CategoryTranslation_Language");
-        });
-
         modelBuilder.Entity<Product>(e =>
         {
             e.ToTable("Product", t =>
@@ -184,6 +201,14 @@ public class TrackerDbContext : DbContext
                 t.HasCheckConstraint(
                     "CK_Product_Dates",
                     "updated_at >= created_at");
+
+                t.HasCheckConstraint(
+                    "CK_Product_NameEn",
+                    "length(trim(name_en)) > 0");
+
+                t.HasCheckConstraint(
+                    "CK_Product_NameAr",
+                    "length(trim(name_ar)) > 0");
             });
 
             e.HasKey(x => x.ProductId).HasName("PK_Product");
@@ -192,6 +217,26 @@ public class TrackerDbContext : DbContext
                 .HasColumnName("product_id")
                 .IsRequired()
                 .UseIdentityByDefaultColumn();
+
+            e.Property(x => x.NameEn)
+                .HasColumnName("name_en")
+                .HasMaxLength(255)
+                .IsRequired();
+
+            e.Property(x => x.NameAr)
+                .HasColumnName("name_ar")
+                .HasMaxLength(255)
+                .IsRequired();
+
+            e.Property(x => x.DescriptionEn)
+                .HasColumnName("description_en")
+                .HasColumnType("text")
+                .IsRequired(false);
+
+            e.Property(x => x.DescriptionAr)
+                .HasColumnName("description_ar")
+                .HasColumnType("text")
+                .IsRequired(false);
 
             e.Property(x => x.Brand)
                 .HasColumnName("brand")
@@ -224,49 +269,6 @@ public class TrackerDbContext : DbContext
                 .HasColumnType("timestamp with time zone")
                 .IsRequired()
                 .HasDefaultValueSql("now()");
-        });
-
-        modelBuilder.Entity<ProductTranslation>(e =>
-        {
-            e.ToTable("ProductTranslation", t =>
-            {
-                t.HasCheckConstraint(
-                    "CK_ProductTranslation_Name",
-                    "length(trim(name)) > 0");
-            });
-
-            e.HasKey(x => new { x.ProductId, x.LanguageCode }).HasName("PK_ProductTranslation");
-
-            e.Property(x => x.ProductId)
-                .HasColumnName("product_id")
-                .IsRequired();
-
-            e.Property(x => x.LanguageCode)
-                .HasColumnName("language_code")
-                .HasMaxLength(10)
-                .IsRequired();
-
-            e.Property(x => x.Name)
-                .HasColumnName("name")
-                .HasMaxLength(255)
-                .IsRequired();
-
-            e.Property(x => x.Description)
-                .HasColumnName("description")
-                .HasColumnType("text")
-                .IsRequired(false);
-
-            e.HasOne(x => x.Product)
-                .WithMany(x => x.Translations)
-                .HasForeignKey(x => x.ProductId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_ProductTranslation_Product");
-
-            e.HasOne(x => x.Language)
-                .WithMany(x => x.ProductTranslations)
-                .HasForeignKey(x => x.LanguageCode)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_ProductTranslation_Language");
         });
 
         modelBuilder.Entity<ProductCategory>(e =>
