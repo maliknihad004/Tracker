@@ -23,17 +23,15 @@ namespace Tracker.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     parent_category_id = table.Column<int>(type: "integer", nullable: true),
                     slug = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    name_en = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    name_ar = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    description_en = table.Column<string>(type: "text", nullable: true),
-                    description_ar = table.Column<string>(type: "text", nullable: true),
+                    name_translation_key = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    description_translation_key = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Category", x => x.category_id);
-                    table.CheckConstraint("CK_Category_NameAr", "length(trim(name_ar)) > 0");
-                    table.CheckConstraint("CK_Category_NameEn", "length(trim(name_en)) > 0");
+                    table.CheckConstraint("CK_Category_DescriptionTranslationKey", "description_translation_key IS NULL OR length(trim(description_translation_key)) > 0");
+                    table.CheckConstraint("CK_Category_NameTranslationKey", "length(trim(name_translation_key)) > 0");
                     table.CheckConstraint("CK_Category_NotOwnParent", "parent_category_id IS NULL OR parent_category_id <> category_id");
                     table.CheckConstraint("CK_Category_Slug", "length(trim(slug)) > 0");
                     table.ForeignKey(
@@ -48,14 +46,17 @@ namespace Tracker.Migrations
                 name: "Language",
                 columns: table => new
                 {
-                    language_code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    native_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    language_id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Language", x => x.language_code);
-                    table.CheckConstraint("CK_Language_NativeName", "length(trim(native_name)) > 0");
+                    table.PrimaryKey("PK_Language", x => x.language_id);
+                    table.CheckConstraint("CK_Language_Code", "length(trim(code)) > 0");
+                    table.CheckConstraint("CK_Language_Name", "length(trim(name)) > 0");
                 });
 
             migrationBuilder.CreateTable(
@@ -105,18 +106,44 @@ namespace Tracker.Migrations
                 name: "Status",
                 columns: table => new
                 {
+                    status_id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     scope = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    label_en = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    label_ar = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    translation_key = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     sort_order = table.Column<int>(type: "integer", nullable: false, defaultValue: 0)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Status", x => new { x.scope, x.code });
-                    table.CheckConstraint("CK_Status_LabelAr", "length(trim(label_ar)) > 0");
-                    table.CheckConstraint("CK_Status_LabelEn", "length(trim(label_en)) > 0");
+                    table.PrimaryKey("PK_Status", x => x.status_id);
+                    table.UniqueConstraint("AK_Status_Id_Scope", x => new { x.status_id, x.scope });
+                    table.CheckConstraint("CK_Status_Code", "length(trim(code)) > 0");
+                    table.CheckConstraint("CK_Status_Scope", "length(trim(scope)) > 0");
+                    table.CheckConstraint("CK_Status_TranslationKey", "length(trim(translation_key)) > 0");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Translation",
+                columns: table => new
+                {
+                    translation_id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    key = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    value = table.Column<string>(type: "text", nullable: false),
+                    language_id = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Translation", x => x.translation_id);
+                    table.CheckConstraint("CK_Translation_Key", "length(trim(key)) > 0");
+                    table.CheckConstraint("CK_Translation_Value", "length(trim(value)) > 0");
+                    table.ForeignKey(
+                        name: "FK_Translation_Language",
+                        column: x => x.language_id,
+                        principalTable: "Language",
+                        principalColumn: "language_id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -128,7 +155,7 @@ namespace Tracker.Migrations
                     name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     email = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     password_hash = table.Column<string>(type: "text", nullable: false),
-                    preferred_language_code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    preferred_language_id = table.Column<int>(type: "integer", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
                     is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
@@ -139,9 +166,9 @@ namespace Tracker.Migrations
                     table.CheckConstraint("CK_User_Name", "length(trim(name)) > 0");
                     table.ForeignKey(
                         name: "FK_User_Language",
-                        column: x => x.preferred_language_code,
+                        column: x => x.preferred_language_id,
                         principalTable: "Language",
-                        principalColumn: "language_code",
+                        principalColumn: "language_id",
                         onDelete: ReferentialAction.Restrict);
                 });
 
@@ -205,7 +232,7 @@ namespace Tracker.Migrations
                     started_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     finished_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     status_scope = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, defaultValue: "crawl_run"),
-                    status_code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, defaultValue: "pending"),
+                    status_id = table.Column<int>(type: "integer", nullable: false),
                     products_found = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     error_message = table.Column<string>(type: "text", nullable: true)
                 },
@@ -223,9 +250,9 @@ namespace Tracker.Migrations
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_CrawlRun_Status",
-                        columns: x => new { x.status_scope, x.status_code },
+                        columns: x => new { x.status_id, x.status_scope },
                         principalTable: "Status",
-                        principalColumns: new[] { "scope", "code" },
+                        principalColumns: new[] { "status_id", "scope" },
                         onDelete: ReferentialAction.Restrict);
                 });
 
@@ -342,7 +369,7 @@ namespace Tracker.Migrations
                     currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: true),
                     raw_specifications = table.Column<JsonDocument>(type: "jsonb", nullable: true),
                     status_scope = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, defaultValue: "listing_match"),
-                    status_code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, defaultValue: "pending"),
+                    status_id = table.Column<int>(type: "integer", nullable: false),
                     crawled_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
@@ -367,9 +394,9 @@ namespace Tracker.Migrations
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_CrawledListing_Status",
-                        columns: x => new { x.status_scope, x.status_code },
+                        columns: x => new { x.status_id, x.status_scope },
                         principalTable: "Status",
-                        principalColumns: new[] { "scope", "code" },
+                        principalColumns: new[] { "status_id", "scope" },
                         onDelete: ReferentialAction.Restrict);
                 });
 
@@ -554,7 +581,7 @@ namespace Tracker.Migrations
                     commission_amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     status_scope = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, defaultValue: "affiliate_conversion"),
-                    status_code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, defaultValue: "pending"),
+                    status_id = table.Column<int>(type: "integer", nullable: false),
                     reported_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
@@ -584,71 +611,95 @@ namespace Tracker.Migrations
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_AffiliateConversion_Status",
-                        columns: x => new { x.status_scope, x.status_code },
+                        columns: x => new { x.status_id, x.status_scope },
                         principalTable: "Status",
-                        principalColumns: new[] { "scope", "code" },
+                        principalColumns: new[] { "status_id", "scope" },
                         onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.InsertData(
                 table: "Language",
-                columns: new[] { "language_code", "is_active", "native_name" },
+                columns: new[] { "language_id", "code", "is_active", "name" },
                 values: new object[,]
                 {
-                    { "ar", true, "العربية" },
-                    { "en", true, "English" }
+                    { 1, "ar", true, "العربية" },
+                    { 2, "en", true, "English" }
                 });
 
             migrationBuilder.InsertData(
                 table: "Status",
-                columns: new[] { "code", "scope", "is_active", "label_ar", "label_en", "sort_order" },
+                columns: new[] { "status_id", "code", "is_active", "scope", "translation_key" },
+                values: new object[] { 1, "pending", true, "crawl_run", "crawl_run_pending" });
+
+            migrationBuilder.InsertData(
+                table: "Status",
+                columns: new[] { "status_id", "code", "is_active", "scope", "sort_order", "translation_key" },
                 values: new object[,]
                 {
-                    { "approved", "affiliate_conversion", true, "تمت الموافقة", "Approved", 10 },
-                    { "paid", "affiliate_conversion", true, "مدفوع", "Paid", 30 }
+                    { 2, "running", true, "crawl_run", 10, "crawl_run_running" },
+                    { 3, "completed", true, "crawl_run", 20, "crawl_run_completed" },
+                    { 4, "failed", true, "crawl_run", 30, "crawl_run_failed" }
                 });
 
             migrationBuilder.InsertData(
                 table: "Status",
-                columns: new[] { "code", "scope", "is_active", "label_ar", "label_en" },
-                values: new object[] { "pending", "affiliate_conversion", true, "قيد الانتظار", "Pending" });
+                columns: new[] { "status_id", "code", "is_active", "scope", "translation_key" },
+                values: new object[] { 5, "pending", true, "listing_match", "listing_match_pending" });
 
             migrationBuilder.InsertData(
                 table: "Status",
-                columns: new[] { "code", "scope", "is_active", "label_ar", "label_en", "sort_order" },
+                columns: new[] { "status_id", "code", "is_active", "scope", "sort_order", "translation_key" },
                 values: new object[,]
                 {
-                    { "rejected", "affiliate_conversion", true, "مرفوض", "Rejected", 20 },
-                    { "completed", "crawl_run", true, "مكتمل", "Completed", 20 },
-                    { "failed", "crawl_run", true, "فشل", "Failed", 30 }
+                    { 6, "matched", true, "listing_match", 10, "listing_match_matched" },
+                    { 7, "unmatched", true, "listing_match", 20, "listing_match_unmatched" },
+                    { 8, "review", true, "listing_match", 30, "listing_match_review" }
                 });
 
             migrationBuilder.InsertData(
                 table: "Status",
-                columns: new[] { "code", "scope", "is_active", "label_ar", "label_en" },
-                values: new object[] { "pending", "crawl_run", true, "قيد الانتظار", "Pending" });
+                columns: new[] { "status_id", "code", "is_active", "scope", "translation_key" },
+                values: new object[] { 9, "pending", true, "affiliate_conversion", "affiliate_conversion_pending" });
 
             migrationBuilder.InsertData(
                 table: "Status",
-                columns: new[] { "code", "scope", "is_active", "label_ar", "label_en", "sort_order" },
+                columns: new[] { "status_id", "code", "is_active", "scope", "sort_order", "translation_key" },
                 values: new object[,]
                 {
-                    { "running", "crawl_run", true, "قيد التنفيذ", "Running", 10 },
-                    { "matched", "listing_match", true, "مطابق", "Matched", 10 }
+                    { 10, "approved", true, "affiliate_conversion", 10, "affiliate_conversion_approved" },
+                    { 11, "rejected", true, "affiliate_conversion", 20, "affiliate_conversion_rejected" },
+                    { 12, "paid", true, "affiliate_conversion", 30, "affiliate_conversion_paid" }
                 });
 
             migrationBuilder.InsertData(
-                table: "Status",
-                columns: new[] { "code", "scope", "is_active", "label_ar", "label_en" },
-                values: new object[] { "pending", "listing_match", true, "قيد الانتظار", "Pending" });
-
-            migrationBuilder.InsertData(
-                table: "Status",
-                columns: new[] { "code", "scope", "is_active", "label_ar", "label_en", "sort_order" },
+                table: "Translation",
+                columns: new[] { "translation_id", "key", "language_id", "value" },
                 values: new object[,]
                 {
-                    { "review", "listing_match", true, "يحتاج مراجعة", "Needs review", 30 },
-                    { "unmatched", "listing_match", true, "غير مطابق", "Unmatched", 20 }
+                    { 1, "crawl_run_pending", 1, "قيد الانتظار" },
+                    { 2, "crawl_run_pending", 2, "Pending" },
+                    { 3, "crawl_run_running", 1, "قيد التنفيذ" },
+                    { 4, "crawl_run_running", 2, "Running" },
+                    { 5, "crawl_run_completed", 1, "مكتمل" },
+                    { 6, "crawl_run_completed", 2, "Completed" },
+                    { 7, "crawl_run_failed", 1, "فشل" },
+                    { 8, "crawl_run_failed", 2, "Failed" },
+                    { 9, "listing_match_pending", 1, "قيد الانتظار" },
+                    { 10, "listing_match_pending", 2, "Pending" },
+                    { 11, "listing_match_matched", 1, "مطابق" },
+                    { 12, "listing_match_matched", 2, "Matched" },
+                    { 13, "listing_match_unmatched", 1, "غير مطابق" },
+                    { 14, "listing_match_unmatched", 2, "Unmatched" },
+                    { 15, "listing_match_review", 1, "يحتاج مراجعة" },
+                    { 16, "listing_match_review", 2, "Needs review" },
+                    { 17, "affiliate_conversion_pending", 1, "قيد الانتظار" },
+                    { 18, "affiliate_conversion_pending", 2, "Pending" },
+                    { 19, "affiliate_conversion_approved", 1, "تمت الموافقة" },
+                    { 20, "affiliate_conversion_approved", 2, "Approved" },
+                    { 21, "affiliate_conversion_rejected", 1, "مرفوض" },
+                    { 22, "affiliate_conversion_rejected", 2, "Rejected" },
+                    { 23, "affiliate_conversion_paid", 1, "مدفوع" },
+                    { 24, "affiliate_conversion_paid", 2, "Paid" }
                 });
 
             migrationBuilder.CreateIndex(
@@ -662,9 +713,9 @@ namespace Tracker.Migrations
                 column: "offer_id");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AffiliateConversion_status_scope_status_code",
+                name: "IX_AffiliateConversion_status_id_status_scope",
                 table: "AffiliateConversion",
-                columns: new[] { "status_scope", "status_code" });
+                columns: new[] { "status_id", "status_scope" });
 
             migrationBuilder.CreateIndex(
                 name: "UX_Conversion_Merchant_ExternalId",
@@ -676,6 +727,12 @@ namespace Tracker.Migrations
                 name: "IX_Category_parent_category_id",
                 table: "Category",
                 column: "parent_category_id");
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_Category_NameTranslationKey",
+                table: "Category",
+                column: "name_translation_key",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "UQ_Category_Slug",
@@ -694,9 +751,9 @@ namespace Tracker.Migrations
                 column: "matched_variant_id");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CrawledListing_status_scope_status_code",
+                name: "IX_CrawledListing_status_id_status_scope",
                 table: "CrawledListing",
-                columns: new[] { "status_scope", "status_code" });
+                columns: new[] { "status_id", "status_scope" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_CrawlRun_merchant_id",
@@ -704,9 +761,15 @@ namespace Tracker.Migrations
                 column: "merchant_id");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CrawlRun_status_scope_status_code",
+                name: "IX_CrawlRun_status_id_status_scope",
                 table: "CrawlRun",
-                columns: new[] { "status_scope", "status_code" });
+                columns: new[] { "status_id", "status_scope" });
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_Language_Code",
+                table: "Language",
+                column: "code",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Notification_alert_id",
@@ -808,7 +871,31 @@ namespace Tracker.Migrations
                 table: "SponsoredListing",
                 column: "offer_id");
 
-            // Expression indexes are not represented in the EF Core model snapshot.
+            migrationBuilder.CreateIndex(
+                name: "UQ_Status_Scope_Code",
+                table: "Status",
+                columns: new[] { "scope", "code" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_Status_TranslationKey",
+                table: "Status",
+                column: "translation_key",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Translation_language_id",
+                table: "Translation",
+                column: "language_id");
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_Translation_Key_Language",
+                table: "Translation",
+                columns: new[] { "key", "language_id" },
+                unique: true);
+
+            // Preserve case-insensitive uniqueness; this expression index cannot
+            // be represented by the EF Core model's ordinary property indexes.
             migrationBuilder.Sql(
                 "CREATE UNIQUE INDEX \"UX_User_Email\" ON \"User\" (LOWER(\"email\"));");
         }
@@ -816,8 +903,7 @@ namespace Tracker.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql(
-                "DROP INDEX IF EXISTS \"UX_User_Email\";");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS \"UX_User_Email\";");
 
             migrationBuilder.DropTable(
                 name: "AffiliateConversion");
@@ -839,6 +925,9 @@ namespace Tracker.Migrations
 
             migrationBuilder.DropTable(
                 name: "SponsoredListing");
+
+            migrationBuilder.DropTable(
+                name: "Translation");
 
             migrationBuilder.DropTable(
                 name: "ShareLinkClick");

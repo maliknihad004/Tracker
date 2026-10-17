@@ -7,7 +7,7 @@ public class CrawlRun
     public DateTimeOffset? FinishedAt { get; set; }
 
     public string StatusScope { get; set; } = "crawl_run";
-    public string StatusCode { get; set; } = "pending";
+    public int StatusId { get; set; }
     public int ProductsFound { get; set; }
     public string? ErrorMessage { get; set; }
 

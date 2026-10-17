@@ -11,7 +11,7 @@ public class AffiliateConversion
 
     public string Currency { get; set; } = null!;
     public string StatusScope { get; set; } = "affiliate_conversion";
-    public string StatusCode { get; set; } = "pending";
+    public int StatusId { get; set; }
     public DateTimeOffset ReportedAt { get; set; }
 
     public Merchant Merchant { get; set; } = null!;

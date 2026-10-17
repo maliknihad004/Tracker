@@ -15,7 +15,7 @@ public class CrawledListing
     public JsonDocument? RawSpecifications { get; set; }
 
     public string StatusScope { get; set; } = "listing_match";
-    public string StatusCode { get; set; } = "pending";
+    public int StatusId { get; set; }
     public DateTimeOffset CrawledAt { get; set; }
 
     public CrawlRun CrawlRun { get; set; } = null!;

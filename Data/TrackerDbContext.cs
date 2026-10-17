@@ -35,6 +35,7 @@ public class TrackerDbContext : DbContext
     }
 
     public DbSet<Language> Languages => Set<Language>();
+    public DbSet<Translation> Translations => Set<Translation>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
@@ -75,7 +76,7 @@ public class TrackerDbContext : DbContext
             if (!unique
                 && entityTypeBuilder.Metadata.ClrType == typeof(User)
                 && properties.Count == 1
-                && properties[0].Name == nameof(User.PreferredLanguageCode))
+                && properties[0].Name == nameof(User.PreferredLanguageId))
             {
                 return null;
             }
@@ -90,31 +91,95 @@ public class TrackerDbContext : DbContext
         {
             e.ToTable("Language", t =>
             {
-                t.HasCheckConstraint(
-                    "CK_Language_NativeName",
-                    "length(trim(native_name)) > 0");
+                t.HasCheckConstraint("CK_Language_Code", "length(trim(code)) > 0");
+                t.HasCheckConstraint("CK_Language_Name", "length(trim(name)) > 0");
             });
 
-            e.HasKey(x => x.LanguageCode).HasName("PK_Language");
-
-            e.Property(x => x.LanguageCode)
-                .HasColumnName("language_code")
+            e.HasKey(x => x.LanguageId).HasName("PK_Language");
+            e.Property(x => x.LanguageId)
+                .HasColumnName("language_id")
+                .UseIdentityByDefaultColumn();
+            e.Property(x => x.Code)
+                .HasColumnName("code")
                 .HasMaxLength(10)
                 .IsRequired();
-
-            e.Property(x => x.NativeName)
-                .HasColumnName("native_name")
+            e.Property(x => x.Name)
+                .HasColumnName("name")
                 .HasMaxLength(100)
                 .IsRequired();
-
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
-                .IsRequired()
                 .HasDefaultValue(true);
 
+            e.HasIndex(x => x.Code)
+                .HasDatabaseName("UQ_Language_Code")
+                .IsUnique();
+
             e.HasData(
-                new { LanguageCode = "en", NativeName = "English", IsActive = true },
-                new { LanguageCode = "ar", NativeName = "العربية", IsActive = true });
+                new { LanguageId = 1, Code = "ar", Name = "العربية", IsActive = true },
+                new { LanguageId = 2, Code = "en", Name = "English", IsActive = true });
+        });
+
+        modelBuilder.Entity<Translation>(e =>
+        {
+            e.ToTable("Translation", t =>
+            {
+                t.HasCheckConstraint("CK_Translation_Key", "length(trim(key)) > 0");
+                t.HasCheckConstraint("CK_Translation_Value", "length(trim(value)) > 0");
+            });
+
+            e.HasKey(x => x.TranslationId).HasName("PK_Translation");
+            e.Property(x => x.TranslationId)
+                .HasColumnName("translation_id")
+                .UseIdentityByDefaultColumn();
+            e.Property(x => x.Key)
+                .HasColumnName("key")
+                .HasMaxLength(200)
+                .IsRequired();
+            e.Property(x => x.Value)
+                .HasColumnName("value")
+                .HasColumnType("text")
+                .IsRequired();
+            e.Property(x => x.LanguageId)
+                .HasColumnName("language_id")
+                .IsRequired();
+
+            // The unique index supports label lookup by key and language. The FK
+            // index on LanguageId supports querying/deleting a language's labels.
+            e.HasIndex(x => new { x.Key, x.LanguageId })
+                .HasDatabaseName("UQ_Translation_Key_Language")
+                .IsUnique();
+            e.HasOne(x => x.Language)
+                .WithMany(x => x.Translations)
+                .HasForeignKey(x => x.LanguageId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Translation_Language");
+
+            e.HasData(
+                new { TranslationId = 1, Key = "crawl_run_pending", LanguageId = 1, Value = "قيد الانتظار" },
+                new { TranslationId = 2, Key = "crawl_run_pending", LanguageId = 2, Value = "Pending" },
+                new { TranslationId = 3, Key = "crawl_run_running", LanguageId = 1, Value = "قيد التنفيذ" },
+                new { TranslationId = 4, Key = "crawl_run_running", LanguageId = 2, Value = "Running" },
+                new { TranslationId = 5, Key = "crawl_run_completed", LanguageId = 1, Value = "مكتمل" },
+                new { TranslationId = 6, Key = "crawl_run_completed", LanguageId = 2, Value = "Completed" },
+                new { TranslationId = 7, Key = "crawl_run_failed", LanguageId = 1, Value = "فشل" },
+                new { TranslationId = 8, Key = "crawl_run_failed", LanguageId = 2, Value = "Failed" },
+                new { TranslationId = 9, Key = "listing_match_pending", LanguageId = 1, Value = "قيد الانتظار" },
+                new { TranslationId = 10, Key = "listing_match_pending", LanguageId = 2, Value = "Pending" },
+                new { TranslationId = 11, Key = "listing_match_matched", LanguageId = 1, Value = "مطابق" },
+                new { TranslationId = 12, Key = "listing_match_matched", LanguageId = 2, Value = "Matched" },
+                new { TranslationId = 13, Key = "listing_match_unmatched", LanguageId = 1, Value = "غير مطابق" },
+                new { TranslationId = 14, Key = "listing_match_unmatched", LanguageId = 2, Value = "Unmatched" },
+                new { TranslationId = 15, Key = "listing_match_review", LanguageId = 1, Value = "يحتاج مراجعة" },
+                new { TranslationId = 16, Key = "listing_match_review", LanguageId = 2, Value = "Needs review" },
+                new { TranslationId = 17, Key = "affiliate_conversion_pending", LanguageId = 1, Value = "قيد الانتظار" },
+                new { TranslationId = 18, Key = "affiliate_conversion_pending", LanguageId = 2, Value = "Pending" },
+                new { TranslationId = 19, Key = "affiliate_conversion_approved", LanguageId = 1, Value = "تمت الموافقة" },
+                new { TranslationId = 20, Key = "affiliate_conversion_approved", LanguageId = 2, Value = "Approved" },
+                new { TranslationId = 21, Key = "affiliate_conversion_rejected", LanguageId = 1, Value = "مرفوض" },
+                new { TranslationId = 22, Key = "affiliate_conversion_rejected", LanguageId = 2, Value = "Rejected" },
+                new { TranslationId = 23, Key = "affiliate_conversion_paid", LanguageId = 1, Value = "مدفوع" },
+                new { TranslationId = 24, Key = "affiliate_conversion_paid", LanguageId = 2, Value = "Paid" });
         });
 
         modelBuilder.Entity<Category>(e =>
@@ -126,12 +191,12 @@ public class TrackerDbContext : DbContext
                     "length(trim(slug)) > 0");
 
                 t.HasCheckConstraint(
-                    "CK_Category_NameEn",
-                    "length(trim(name_en)) > 0");
+                    "CK_Category_NameTranslationKey",
+                    "length(trim(name_translation_key)) > 0");
 
                 t.HasCheckConstraint(
-                    "CK_Category_NameAr",
-                    "length(trim(name_ar)) > 0");
+                    "CK_Category_DescriptionTranslationKey",
+                    "description_translation_key IS NULL OR length(trim(description_translation_key)) > 0");
 
                 t.HasCheckConstraint(
                     "CK_Category_NotOwnParent",
@@ -154,24 +219,14 @@ public class TrackerDbContext : DbContext
                 .HasMaxLength(150)
                 .IsRequired();
 
-            e.Property(x => x.NameEn)
-                .HasColumnName("name_en")
-                .HasMaxLength(150)
+            e.Property(x => x.NameTranslationKey)
+                .HasColumnName("name_translation_key")
+                .HasMaxLength(200)
                 .IsRequired();
 
-            e.Property(x => x.NameAr)
-                .HasColumnName("name_ar")
-                .HasMaxLength(150)
-                .IsRequired();
-
-            e.Property(x => x.DescriptionEn)
-                .HasColumnName("description_en")
-                .HasColumnType("text")
-                .IsRequired(false);
-
-            e.Property(x => x.DescriptionAr)
-                .HasColumnName("description_ar")
-                .HasColumnType("text")
+            e.Property(x => x.DescriptionTranslationKey)
+                .HasColumnName("description_translation_key")
+                .HasMaxLength(200)
                 .IsRequired(false);
 
             e.Property(x => x.IsActive)
@@ -183,6 +238,12 @@ public class TrackerDbContext : DbContext
                 .HasDatabaseName("UQ_Category_Slug")
                 .IsUnique();
 
+            e.HasIndex(x => x.NameTranslationKey)
+                .HasDatabaseName("UQ_Category_NameTranslationKey")
+                .IsUnique();
+
+            // Translation.Key repeats per language, so these keys are logical
+            // references. Application code must create the required translations.
             e.HasOne(x => x.ParentCategory)
                 .WithMany(x => x.ChildCategories)
                 .HasForeignKey(x => x.ParentCategoryId)
@@ -588,9 +649,8 @@ public class TrackerDbContext : DbContext
                 .HasColumnType("text")
                 .IsRequired();
 
-            e.Property(x => x.PreferredLanguageCode)
-                .HasColumnName("preferred_language_code")
-                .HasMaxLength(10)
+            e.Property(x => x.PreferredLanguageId)
+                .HasColumnName("preferred_language_id")
                 .IsRequired(false);
 
             e.Property(x => x.IsActive)
@@ -612,7 +672,7 @@ public class TrackerDbContext : DbContext
 
             e.HasOne(x => x.PreferredLanguage)
                 .WithMany(x => x.Users)
-                .HasForeignKey(x => x.PreferredLanguageCode)
+                .HasForeignKey(x => x.PreferredLanguageId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_User_Language");
         });
@@ -877,11 +937,9 @@ public class TrackerDbContext : DbContext
                 .IsRequired()
                 .HasDefaultValue("affiliate_conversion");
 
-            e.Property(x => x.StatusCode)
-                .HasColumnName("status_code")
-                .HasMaxLength(50)
-                .IsRequired()
-                .HasDefaultValue("pending");
+            e.Property(x => x.StatusId)
+                .HasColumnName("status_id")
+                .IsRequired();
 
             e.Property(x => x.ReportedAt)
                 .HasColumnName("reported_at")
@@ -913,7 +971,8 @@ public class TrackerDbContext : DbContext
 
             e.HasOne(x => x.Status)
                 .WithMany(x => x.AffiliateConversions)
-                .HasForeignKey(x => new { x.StatusScope, x.StatusCode })
+                .HasForeignKey(x => new { x.StatusId, x.StatusScope })
+                .HasPrincipalKey(x => new { x.StatusId, x.Scope })
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_AffiliateConversion_Status");
         });
@@ -1089,11 +1148,9 @@ public class TrackerDbContext : DbContext
                 .IsRequired()
                 .HasDefaultValue("crawl_run");
 
-            e.Property(x => x.StatusCode)
-                .HasColumnName("status_code")
-                .HasMaxLength(50)
-                .IsRequired()
-                .HasDefaultValue("pending");
+            e.Property(x => x.StatusId)
+                .HasColumnName("status_id")
+                .IsRequired();
 
             e.Property(x => x.ProductsFound)
                 .HasColumnName("products_found")
@@ -1113,7 +1170,8 @@ public class TrackerDbContext : DbContext
 
             e.HasOne(x => x.Status)
                 .WithMany(x => x.CrawlRuns)
-                .HasForeignKey(x => new { x.StatusScope, x.StatusCode })
+                .HasForeignKey(x => new { x.StatusId, x.StatusScope })
+                .HasPrincipalKey(x => new { x.StatusId, x.Scope })
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_CrawlRun_Status");
         });
@@ -1194,11 +1252,9 @@ public class TrackerDbContext : DbContext
                 .IsRequired()
                 .HasDefaultValue("listing_match");
 
-            e.Property(x => x.StatusCode)
-                .HasColumnName("status_code")
-                .HasMaxLength(50)
-                .IsRequired()
-                .HasDefaultValue("pending");
+            e.Property(x => x.StatusId)
+                .HasColumnName("status_id")
+                .IsRequired();
 
             e.Property(x => x.CrawledAt)
                 .HasColumnName("crawled_at")
@@ -1220,7 +1276,8 @@ public class TrackerDbContext : DbContext
 
             e.HasOne(x => x.Status)
                 .WithMany(x => x.CrawledListings)
-                .HasForeignKey(x => new { x.StatusScope, x.StatusCode })
+                .HasForeignKey(x => new { x.StatusId, x.StatusScope })
+                .HasPrincipalKey(x => new { x.StatusId, x.Scope })
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_CrawledListing_Status");
         });
@@ -1289,62 +1346,58 @@ public class TrackerDbContext : DbContext
         {
             e.ToTable("Status", t =>
             {
-                t.HasCheckConstraint(
-                    "CK_Status_LabelEn",
-                    "length(trim(label_en)) > 0");
-
-                t.HasCheckConstraint(
-                    "CK_Status_LabelAr",
-                    "length(trim(label_ar)) > 0");
+                t.HasCheckConstraint("CK_Status_Scope", "length(trim(scope)) > 0");
+                t.HasCheckConstraint("CK_Status_Code", "length(trim(code)) > 0");
+                t.HasCheckConstraint("CK_Status_TranslationKey", "length(trim(translation_key)) > 0");
             });
 
-            e.HasKey(x => new { x.Scope, x.Code }).HasName("PK_Status");
-
+            e.HasKey(x => x.StatusId).HasName("PK_Status");
+            // Workflow FKs include scope so a status from another workflow cannot
+            // be assigned even when its numeric ID exists.
+            e.HasAlternateKey(x => new { x.StatusId, x.Scope })
+                .HasName("AK_Status_Id_Scope");
+            e.Property(x => x.StatusId)
+                .HasColumnName("status_id")
+                .UseIdentityByDefaultColumn();
             e.Property(x => x.Scope)
                 .HasColumnName("scope")
                 .HasMaxLength(50)
                 .IsRequired();
-
             e.Property(x => x.Code)
                 .HasColumnName("code")
                 .HasMaxLength(50)
                 .IsRequired();
-
-            e.Property(x => x.LabelEn)
-                .HasColumnName("label_en")
-                .HasMaxLength(100)
+            e.Property(x => x.TranslationKey)
+                .HasColumnName("translation_key")
+                .HasMaxLength(200)
                 .IsRequired();
-
-            e.Property(x => x.LabelAr)
-                .HasColumnName("label_ar")
-                .HasMaxLength(100)
-                .IsRequired();
-
             e.Property(x => x.IsActive)
                 .HasColumnName("is_active")
-                .IsRequired()
                 .HasDefaultValue(true);
-
             e.Property(x => x.SortOrder)
                 .HasColumnName("sort_order")
-                .IsRequired()
                 .HasDefaultValue(0);
 
+            e.HasIndex(x => new { x.Scope, x.Code })
+                .HasDatabaseName("UQ_Status_Scope_Code")
+                .IsUnique();
+            e.HasIndex(x => x.TranslationKey)
+                .HasDatabaseName("UQ_Status_TranslationKey")
+                .IsUnique();
+
             e.HasData(
-                new { Scope = "crawl_run", Code = "pending", LabelEn = "Pending", LabelAr = "قيد الانتظار", IsActive = true, SortOrder = 0 },
-                new { Scope = "crawl_run", Code = "running", LabelEn = "Running", LabelAr = "قيد التنفيذ", IsActive = true, SortOrder = 10 },
-                new { Scope = "crawl_run", Code = "completed", LabelEn = "Completed", LabelAr = "مكتمل", IsActive = true, SortOrder = 20 },
-                new { Scope = "crawl_run", Code = "failed", LabelEn = "Failed", LabelAr = "فشل", IsActive = true, SortOrder = 30 },
-
-                new { Scope = "listing_match", Code = "pending", LabelEn = "Pending", LabelAr = "قيد الانتظار", IsActive = true, SortOrder = 0 },
-                new { Scope = "listing_match", Code = "matched", LabelEn = "Matched", LabelAr = "مطابق", IsActive = true, SortOrder = 10 },
-                new { Scope = "listing_match", Code = "unmatched", LabelEn = "Unmatched", LabelAr = "غير مطابق", IsActive = true, SortOrder = 20 },
-                new { Scope = "listing_match", Code = "review", LabelEn = "Needs review", LabelAr = "يحتاج مراجعة", IsActive = true, SortOrder = 30 },
-
-                new { Scope = "affiliate_conversion", Code = "pending", LabelEn = "Pending", LabelAr = "قيد الانتظار", IsActive = true, SortOrder = 0 },
-                new { Scope = "affiliate_conversion", Code = "approved", LabelEn = "Approved", LabelAr = "تمت الموافقة", IsActive = true, SortOrder = 10 },
-                new { Scope = "affiliate_conversion", Code = "rejected", LabelEn = "Rejected", LabelAr = "مرفوض", IsActive = true, SortOrder = 20 },
-                new { Scope = "affiliate_conversion", Code = "paid", LabelEn = "Paid", LabelAr = "مدفوع", IsActive = true, SortOrder = 30 });
+                new { StatusId = 1, Scope = "crawl_run", Code = "pending", TranslationKey = "crawl_run_pending", IsActive = true, SortOrder = 0 },
+                new { StatusId = 2, Scope = "crawl_run", Code = "running", TranslationKey = "crawl_run_running", IsActive = true, SortOrder = 10 },
+                new { StatusId = 3, Scope = "crawl_run", Code = "completed", TranslationKey = "crawl_run_completed", IsActive = true, SortOrder = 20 },
+                new { StatusId = 4, Scope = "crawl_run", Code = "failed", TranslationKey = "crawl_run_failed", IsActive = true, SortOrder = 30 },
+                new { StatusId = 5, Scope = "listing_match", Code = "pending", TranslationKey = "listing_match_pending", IsActive = true, SortOrder = 0 },
+                new { StatusId = 6, Scope = "listing_match", Code = "matched", TranslationKey = "listing_match_matched", IsActive = true, SortOrder = 10 },
+                new { StatusId = 7, Scope = "listing_match", Code = "unmatched", TranslationKey = "listing_match_unmatched", IsActive = true, SortOrder = 20 },
+                new { StatusId = 8, Scope = "listing_match", Code = "review", TranslationKey = "listing_match_review", IsActive = true, SortOrder = 30 },
+                new { StatusId = 9, Scope = "affiliate_conversion", Code = "pending", TranslationKey = "affiliate_conversion_pending", IsActive = true, SortOrder = 0 },
+                new { StatusId = 10, Scope = "affiliate_conversion", Code = "approved", TranslationKey = "affiliate_conversion_approved", IsActive = true, SortOrder = 10 },
+                new { StatusId = 11, Scope = "affiliate_conversion", Code = "rejected", TranslationKey = "affiliate_conversion_rejected", IsActive = true, SortOrder = 20 },
+                new { StatusId = 12, Scope = "affiliate_conversion", Code = "paid", TranslationKey = "affiliate_conversion_paid", IsActive = true, SortOrder = 30 });
         });
     }
 }

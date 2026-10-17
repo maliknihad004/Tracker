@@ -1,9 +1,9 @@
 public class Status
 {
+    public int StatusId { get; set; }
     public string Scope { get; set; } = null!;
     public string Code { get; set; } = null!;
-    public string LabelEn { get; set; } = null!;
-    public string LabelAr { get; set; } = null!;
+    public string TranslationKey { get; set; } = null!;
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
 

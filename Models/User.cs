@@ -4,7 +4,7 @@ public class User
     public string Name { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string PasswordHash { get; set; } = null!;
-    public string? PreferredLanguageCode { get; set; }
+    public int? PreferredLanguageId { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public bool IsActive { get; set; } = true;

@@ -13,7 +13,7 @@ using Tracker.Data;
 namespace Tracker.Migrations
 {
     [DbContext(typeof(TrackerDbContext))]
-    [Migration("20261017100244_InitialCreate")]
+    [Migration("20261017175841_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -74,13 +74,9 @@ namespace Tracker.Migrations
                         .HasColumnName("reported_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<string>("StatusCode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("pending")
-                        .HasColumnName("status_code");
+                    b.Property<int>("StatusId")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_id");
 
                     b.Property<string>("StatusScope")
                         .IsRequired()
@@ -101,7 +97,7 @@ namespace Tracker.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_Conversion_Merchant_ExternalId");
 
-                    b.HasIndex("StatusScope", "StatusCode");
+                    b.HasIndex("StatusId", "StatusScope");
 
                     b.ToTable("AffiliateConversion", null, t =>
                         {
@@ -124,13 +120,10 @@ namespace Tracker.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CategoryId"));
 
-                    b.Property<string>("DescriptionAr")
-                        .HasColumnType("text")
-                        .HasColumnName("description_ar");
-
-                    b.Property<string>("DescriptionEn")
-                        .HasColumnType("text")
-                        .HasColumnName("description_en");
+                    b.Property<string>("DescriptionTranslationKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("description_translation_key");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -138,17 +131,11 @@ namespace Tracker.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
-                    b.Property<string>("NameAr")
+                    b.Property<string>("NameTranslationKey")
                         .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("name_ar");
-
-                    b.Property<string>("NameEn")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("name_en");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name_translation_key");
 
                     b.Property<int?>("ParentCategoryId")
                         .HasColumnType("integer")
@@ -163,6 +150,10 @@ namespace Tracker.Migrations
                     b.HasKey("CategoryId")
                         .HasName("PK_Category");
 
+                    b.HasIndex("NameTranslationKey")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Category_NameTranslationKey");
+
                     b.HasIndex("ParentCategoryId");
 
                     b.HasIndex("Slug")
@@ -171,9 +162,9 @@ namespace Tracker.Migrations
 
                     b.ToTable("Category", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Category_NameAr", "length(trim(name_ar)) > 0");
+                            t.HasCheckConstraint("CK_Category_DescriptionTranslationKey", "description_translation_key IS NULL OR length(trim(description_translation_key)) > 0");
 
-                            t.HasCheckConstraint("CK_Category_NameEn", "length(trim(name_en)) > 0");
+                            t.HasCheckConstraint("CK_Category_NameTranslationKey", "length(trim(name_translation_key)) > 0");
 
                             t.HasCheckConstraint("CK_Category_NotOwnParent", "parent_category_id IS NULL OR parent_category_id <> category_id");
 
@@ -212,13 +203,9 @@ namespace Tracker.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
 
-                    b.Property<string>("StatusCode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("pending")
-                        .HasColumnName("status_code");
+                    b.Property<int>("StatusId")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_id");
 
                     b.Property<string>("StatusScope")
                         .IsRequired()
@@ -233,7 +220,7 @@ namespace Tracker.Migrations
 
                     b.HasIndex("MerchantId");
 
-                    b.HasIndex("StatusScope", "StatusCode");
+                    b.HasIndex("StatusId", "StatusScope");
 
                     b.ToTable("CrawlRun", null, t =>
                         {
@@ -298,13 +285,9 @@ namespace Tracker.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("raw_specifications");
 
-                    b.Property<string>("StatusCode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("pending")
-                        .HasColumnName("status_code");
+                    b.Property<int>("StatusId")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_id");
 
                     b.Property<string>("StatusScope")
                         .IsRequired()
@@ -321,7 +304,7 @@ namespace Tracker.Migrations
 
                     b.HasIndex("MatchedVariantId");
 
-                    b.HasIndex("StatusScope", "StatusCode");
+                    b.HasIndex("StatusId", "StatusScope");
 
                     b.ToTable("CrawledListing", null, t =>
                         {
@@ -339,10 +322,18 @@ namespace Tracker.Migrations
 
             modelBuilder.Entity("Language", b =>
                 {
-                    b.Property<string>("LanguageCode")
+                    b.Property<int>("LanguageId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("language_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("LanguageId"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)")
-                        .HasColumnName("language_code");
+                        .HasColumnName("code");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -350,32 +341,40 @@ namespace Tracker.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
-                    b.Property<string>("NativeName")
+                    b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
-                        .HasColumnName("native_name");
+                        .HasColumnName("name");
 
-                    b.HasKey("LanguageCode")
+                    b.HasKey("LanguageId")
                         .HasName("PK_Language");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Language_Code");
 
                     b.ToTable("Language", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Language_NativeName", "length(trim(native_name)) > 0");
+                            t.HasCheckConstraint("CK_Language_Code", "length(trim(code)) > 0");
+
+                            t.HasCheckConstraint("CK_Language_Name", "length(trim(name)) > 0");
                         });
 
                     b.HasData(
                         new
                         {
-                            LanguageCode = "en",
+                            LanguageId = 1,
+                            Code = "ar",
                             IsActive = true,
-                            NativeName = "English"
+                            Name = "العربية"
                         },
                         new
                         {
-                            LanguageCode = "ar",
+                            LanguageId = 2,
+                            Code = "en",
                             IsActive = true,
-                            NativeName = "العربية"
+                            Name = "English"
                         });
                 });
 
@@ -1033,12 +1032,15 @@ namespace Tracker.Migrations
 
             modelBuilder.Entity("Status", b =>
                 {
-                    b.Property<string>("Scope")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("scope");
+                    b.Property<int>("StatusId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("status_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("StatusId"));
 
                     b.Property<string>("Code")
+                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("code");
@@ -1049,17 +1051,11 @@ namespace Tracker.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
-                    b.Property<string>("LabelAr")
+                    b.Property<string>("Scope")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("label_ar");
-
-                    b.Property<string>("LabelEn")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("label_en");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("scope");
 
                     b.Property<int>("SortOrder")
                         .ValueGeneratedOnAdd()
@@ -1067,124 +1063,354 @@ namespace Tracker.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("sort_order");
 
-                    b.HasKey("Scope", "Code")
+                    b.Property<string>("TranslationKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("translation_key");
+
+                    b.HasKey("StatusId")
                         .HasName("PK_Status");
+
+                    b.HasAlternateKey("StatusId", "Scope")
+                        .HasName("AK_Status_Id_Scope");
+
+                    b.HasIndex("TranslationKey")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Status_TranslationKey");
+
+                    b.HasIndex("Scope", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Status_Scope_Code");
 
                     b.ToTable("Status", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Status_LabelAr", "length(trim(label_ar)) > 0");
+                            t.HasCheckConstraint("CK_Status_Code", "length(trim(code)) > 0");
 
-                            t.HasCheckConstraint("CK_Status_LabelEn", "length(trim(label_en)) > 0");
+                            t.HasCheckConstraint("CK_Status_Scope", "length(trim(scope)) > 0");
+
+                            t.HasCheckConstraint("CK_Status_TranslationKey", "length(trim(translation_key)) > 0");
                         });
 
                     b.HasData(
                         new
                         {
-                            Scope = "crawl_run",
+                            StatusId = 1,
                             Code = "pending",
                             IsActive = true,
-                            LabelAr = "قيد الانتظار",
-                            LabelEn = "Pending",
-                            SortOrder = 0
+                            Scope = "crawl_run",
+                            SortOrder = 0,
+                            TranslationKey = "crawl_run_pending"
                         },
                         new
                         {
-                            Scope = "crawl_run",
+                            StatusId = 2,
                             Code = "running",
                             IsActive = true,
-                            LabelAr = "قيد التنفيذ",
-                            LabelEn = "Running",
-                            SortOrder = 10
+                            Scope = "crawl_run",
+                            SortOrder = 10,
+                            TranslationKey = "crawl_run_running"
                         },
                         new
                         {
-                            Scope = "crawl_run",
+                            StatusId = 3,
                             Code = "completed",
                             IsActive = true,
-                            LabelAr = "مكتمل",
-                            LabelEn = "Completed",
-                            SortOrder = 20
+                            Scope = "crawl_run",
+                            SortOrder = 20,
+                            TranslationKey = "crawl_run_completed"
                         },
                         new
                         {
-                            Scope = "crawl_run",
+                            StatusId = 4,
                             Code = "failed",
                             IsActive = true,
-                            LabelAr = "فشل",
-                            LabelEn = "Failed",
-                            SortOrder = 30
+                            Scope = "crawl_run",
+                            SortOrder = 30,
+                            TranslationKey = "crawl_run_failed"
                         },
                         new
                         {
-                            Scope = "listing_match",
+                            StatusId = 5,
                             Code = "pending",
                             IsActive = true,
-                            LabelAr = "قيد الانتظار",
-                            LabelEn = "Pending",
-                            SortOrder = 0
+                            Scope = "listing_match",
+                            SortOrder = 0,
+                            TranslationKey = "listing_match_pending"
                         },
                         new
                         {
-                            Scope = "listing_match",
+                            StatusId = 6,
                             Code = "matched",
                             IsActive = true,
-                            LabelAr = "مطابق",
-                            LabelEn = "Matched",
-                            SortOrder = 10
+                            Scope = "listing_match",
+                            SortOrder = 10,
+                            TranslationKey = "listing_match_matched"
                         },
                         new
                         {
-                            Scope = "listing_match",
+                            StatusId = 7,
                             Code = "unmatched",
                             IsActive = true,
-                            LabelAr = "غير مطابق",
-                            LabelEn = "Unmatched",
-                            SortOrder = 20
+                            Scope = "listing_match",
+                            SortOrder = 20,
+                            TranslationKey = "listing_match_unmatched"
                         },
                         new
                         {
-                            Scope = "listing_match",
+                            StatusId = 8,
                             Code = "review",
                             IsActive = true,
-                            LabelAr = "يحتاج مراجعة",
-                            LabelEn = "Needs review",
-                            SortOrder = 30
+                            Scope = "listing_match",
+                            SortOrder = 30,
+                            TranslationKey = "listing_match_review"
                         },
                         new
                         {
-                            Scope = "affiliate_conversion",
+                            StatusId = 9,
                             Code = "pending",
                             IsActive = true,
-                            LabelAr = "قيد الانتظار",
-                            LabelEn = "Pending",
-                            SortOrder = 0
+                            Scope = "affiliate_conversion",
+                            SortOrder = 0,
+                            TranslationKey = "affiliate_conversion_pending"
                         },
                         new
                         {
-                            Scope = "affiliate_conversion",
+                            StatusId = 10,
                             Code = "approved",
                             IsActive = true,
-                            LabelAr = "تمت الموافقة",
-                            LabelEn = "Approved",
-                            SortOrder = 10
+                            Scope = "affiliate_conversion",
+                            SortOrder = 10,
+                            TranslationKey = "affiliate_conversion_approved"
                         },
                         new
                         {
-                            Scope = "affiliate_conversion",
+                            StatusId = 11,
                             Code = "rejected",
                             IsActive = true,
-                            LabelAr = "مرفوض",
-                            LabelEn = "Rejected",
-                            SortOrder = 20
+                            Scope = "affiliate_conversion",
+                            SortOrder = 20,
+                            TranslationKey = "affiliate_conversion_rejected"
                         },
                         new
                         {
-                            Scope = "affiliate_conversion",
+                            StatusId = 12,
                             Code = "paid",
                             IsActive = true,
-                            LabelAr = "مدفوع",
-                            LabelEn = "Paid",
-                            SortOrder = 30
+                            Scope = "affiliate_conversion",
+                            SortOrder = 30,
+                            TranslationKey = "affiliate_conversion_paid"
+                        });
+                });
+
+            modelBuilder.Entity("Translation", b =>
+                {
+                    b.Property<int>("TranslationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("translation_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TranslationId"));
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("key");
+
+                    b.Property<int>("LanguageId")
+                        .HasColumnType("integer")
+                        .HasColumnName("language_id");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("TranslationId")
+                        .HasName("PK_Translation");
+
+                    b.HasIndex("LanguageId");
+
+                    b.HasIndex("Key", "LanguageId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Translation_Key_Language");
+
+                    b.ToTable("Translation", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Translation_Key", "length(trim(key)) > 0");
+
+                            t.HasCheckConstraint("CK_Translation_Value", "length(trim(value)) > 0");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            TranslationId = 1,
+                            Key = "crawl_run_pending",
+                            LanguageId = 1,
+                            Value = "قيد الانتظار"
+                        },
+                        new
+                        {
+                            TranslationId = 2,
+                            Key = "crawl_run_pending",
+                            LanguageId = 2,
+                            Value = "Pending"
+                        },
+                        new
+                        {
+                            TranslationId = 3,
+                            Key = "crawl_run_running",
+                            LanguageId = 1,
+                            Value = "قيد التنفيذ"
+                        },
+                        new
+                        {
+                            TranslationId = 4,
+                            Key = "crawl_run_running",
+                            LanguageId = 2,
+                            Value = "Running"
+                        },
+                        new
+                        {
+                            TranslationId = 5,
+                            Key = "crawl_run_completed",
+                            LanguageId = 1,
+                            Value = "مكتمل"
+                        },
+                        new
+                        {
+                            TranslationId = 6,
+                            Key = "crawl_run_completed",
+                            LanguageId = 2,
+                            Value = "Completed"
+                        },
+                        new
+                        {
+                            TranslationId = 7,
+                            Key = "crawl_run_failed",
+                            LanguageId = 1,
+                            Value = "فشل"
+                        },
+                        new
+                        {
+                            TranslationId = 8,
+                            Key = "crawl_run_failed",
+                            LanguageId = 2,
+                            Value = "Failed"
+                        },
+                        new
+                        {
+                            TranslationId = 9,
+                            Key = "listing_match_pending",
+                            LanguageId = 1,
+                            Value = "قيد الانتظار"
+                        },
+                        new
+                        {
+                            TranslationId = 10,
+                            Key = "listing_match_pending",
+                            LanguageId = 2,
+                            Value = "Pending"
+                        },
+                        new
+                        {
+                            TranslationId = 11,
+                            Key = "listing_match_matched",
+                            LanguageId = 1,
+                            Value = "مطابق"
+                        },
+                        new
+                        {
+                            TranslationId = 12,
+                            Key = "listing_match_matched",
+                            LanguageId = 2,
+                            Value = "Matched"
+                        },
+                        new
+                        {
+                            TranslationId = 13,
+                            Key = "listing_match_unmatched",
+                            LanguageId = 1,
+                            Value = "غير مطابق"
+                        },
+                        new
+                        {
+                            TranslationId = 14,
+                            Key = "listing_match_unmatched",
+                            LanguageId = 2,
+                            Value = "Unmatched"
+                        },
+                        new
+                        {
+                            TranslationId = 15,
+                            Key = "listing_match_review",
+                            LanguageId = 1,
+                            Value = "يحتاج مراجعة"
+                        },
+                        new
+                        {
+                            TranslationId = 16,
+                            Key = "listing_match_review",
+                            LanguageId = 2,
+                            Value = "Needs review"
+                        },
+                        new
+                        {
+                            TranslationId = 17,
+                            Key = "affiliate_conversion_pending",
+                            LanguageId = 1,
+                            Value = "قيد الانتظار"
+                        },
+                        new
+                        {
+                            TranslationId = 18,
+                            Key = "affiliate_conversion_pending",
+                            LanguageId = 2,
+                            Value = "Pending"
+                        },
+                        new
+                        {
+                            TranslationId = 19,
+                            Key = "affiliate_conversion_approved",
+                            LanguageId = 1,
+                            Value = "تمت الموافقة"
+                        },
+                        new
+                        {
+                            TranslationId = 20,
+                            Key = "affiliate_conversion_approved",
+                            LanguageId = 2,
+                            Value = "Approved"
+                        },
+                        new
+                        {
+                            TranslationId = 21,
+                            Key = "affiliate_conversion_rejected",
+                            LanguageId = 1,
+                            Value = "مرفوض"
+                        },
+                        new
+                        {
+                            TranslationId = 22,
+                            Key = "affiliate_conversion_rejected",
+                            LanguageId = 2,
+                            Value = "Rejected"
+                        },
+                        new
+                        {
+                            TranslationId = 23,
+                            Key = "affiliate_conversion_paid",
+                            LanguageId = 1,
+                            Value = "مدفوع"
+                        },
+                        new
+                        {
+                            TranslationId = 24,
+                            Key = "affiliate_conversion_paid",
+                            LanguageId = 2,
+                            Value = "Paid"
                         });
                 });
 
@@ -1226,10 +1452,9 @@ namespace Tracker.Migrations
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
 
-                    b.Property<string>("PreferredLanguageCode")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("preferred_language_code");
+                    b.Property<int?>("PreferredLanguageId")
+                        .HasColumnType("integer")
+                        .HasColumnName("preferred_language_id");
 
                     b.HasKey("UserId")
                         .HasName("PK_User");
@@ -1265,7 +1490,8 @@ namespace Tracker.Migrations
 
                     b.HasOne("Status", "Status")
                         .WithMany("AffiliateConversions")
-                        .HasForeignKey("StatusScope", "StatusCode")
+                        .HasForeignKey("StatusId", "StatusScope")
+                        .HasPrincipalKey("StatusId", "Scope")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("FK_AffiliateConversion_Status");
@@ -1301,7 +1527,8 @@ namespace Tracker.Migrations
 
                     b.HasOne("Status", "Status")
                         .WithMany("CrawlRuns")
-                        .HasForeignKey("StatusScope", "StatusCode")
+                        .HasForeignKey("StatusId", "StatusScope")
+                        .HasPrincipalKey("StatusId", "Scope")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("FK_CrawlRun_Status");
@@ -1328,7 +1555,8 @@ namespace Tracker.Migrations
 
                     b.HasOne("Status", "Status")
                         .WithMany("CrawledListings")
-                        .HasForeignKey("StatusScope", "StatusCode")
+                        .HasForeignKey("StatusId", "StatusScope")
+                        .HasPrincipalKey("StatusId", "Scope")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("FK_CrawledListing_Status");
@@ -1532,11 +1760,23 @@ namespace Tracker.Migrations
                     b.Navigation("Offer");
                 });
 
+            modelBuilder.Entity("Translation", b =>
+                {
+                    b.HasOne("Language", "Language")
+                        .WithMany("Translations")
+                        .HasForeignKey("LanguageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_Translation_Language");
+
+                    b.Navigation("Language");
+                });
+
             modelBuilder.Entity("User", b =>
                 {
                     b.HasOne("Language", "PreferredLanguage")
                         .WithMany("Users")
-                        .HasForeignKey("PreferredLanguageCode")
+                        .HasForeignKey("PreferredLanguageId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_User_Language");
 
@@ -1557,6 +1797,8 @@ namespace Tracker.Migrations
 
             modelBuilder.Entity("Language", b =>
                 {
+                    b.Navigation("Translations");
+
                     b.Navigation("Users");
                 });
 
